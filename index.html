@@ -1,0 +1,2050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d1117">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GetCab">
+<title>GetCab — Shift Console</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#0d1117;
+    --surface:#141b23;
+    --surface2:#1b232d;
+    --surface3:#222c38;
+    --border:#28313d;
+    --text:#e7edf3;
+    --text-dim:#8b97a5;
+    --text-faint:#5c6773;
+    --amber:#e8a33d;
+    --amber-bg:rgba(232,163,61,0.10);
+    --amber-bg-strong:rgba(232,163,61,0.18);
+    --green:#3ecf8e;
+    --green-bg:rgba(62,207,142,0.10);
+    --red:#e0596b;
+    --red-bg:rgba(224,89,107,0.10);
+    --teal:#38c4d9;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-tap-highlight-color:transparent;}
+  body{padding-bottom:72px;}
+  ::selection{background:var(--teal);color:#04141a;}
+
+  /* ---------- Header ---------- */
+  header{
+    position:sticky; top:0; z-index:40;
+    background:linear-gradient(180deg, #101720 0%, #0d1117 100%);
+    border-bottom:1px solid var(--border);
+    padding:14px 16px 0 16px;
+  }
+  .brandrow{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .brand{display:flex; align-items:baseline; gap:8px;}
+  .brand .mark{
+    width:30px;height:30px;border-radius:8px;
+    background:linear-gradient(135deg, var(--amber), #c97a1f);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800; font-size:15px; color:#1a1305; flex:none;
+  }
+  .brand h1{font-size:16px; margin:0; font-weight:700; letter-spacing:0.2px;}
+  .brand .sub{font-size:11px; color:var(--text-dim); font-family:var(--mono);}
+  .clockbox{text-align:right;}
+  .clockbox .time{font-family:var(--mono); font-size:15px; font-weight:600; color:var(--teal);}
+  .clockbox .date{font-size:10.5px; color:var(--text-dim); font-family:var(--mono);}
+
+  .opline{display:flex; gap:14px; padding:10px 0 12px 0; font-size:11.5px; color:var(--text-dim); font-family:var(--mono); flex-wrap:wrap;}
+  .opline b{color:var(--text);}
+
+  nav.tabs{display:flex; gap:4px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none;}
+  nav.tabs::-webkit-scrollbar{display:none;}
+  nav.tabs button{
+    flex:none; background:transparent; border:none; color:var(--text-dim);
+    font-family:var(--sans); font-size:13.5px; font-weight:600; padding:10px 14px 12px 14px;
+    border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;
+  }
+  nav.tabs button .dot{display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; vertical-align:middle;}
+  nav.tabs button.active{color:var(--text); border-bottom-color:var(--teal);}
+
+  main{max-width:720px; margin:0 auto; padding:16px;}
+
+  /* ---------- Banner ---------- */
+  .banner{
+    display:flex; gap:10px; align-items:flex-start;
+    background:var(--red-bg); border:1px solid rgba(224,89,107,0.35);
+    padding:12px 14px; border-radius:10px; margin-bottom:16px; font-size:13px; line-height:1.5;
+  }
+  .banner.warn{background:var(--amber-bg); border-color:rgba(232,163,61,0.35);}
+  .banner .ico{flex:none; font-size:16px;}
+  .banner b{display:block; margin-bottom:2px;}
+  .banner ul{margin:6px 0 0 0; padding-left:18px; color:var(--text-dim);}
+
+  /* ---------- Section ---------- */
+  .section{margin-bottom:22px;}
+  .section-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .section-head h2{font-size:13px; margin:0; text-transform:none; color:var(--text); font-weight:700; display:flex; align-items:center; gap:8px;}
+  .section-head .num{
+    width:20px;height:20px;border-radius:6px;background:var(--surface3);
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:var(--mono); font-size:11px; color:var(--text-dim); flex:none;
+  }
+  .section-head .count{font-family:var(--mono); font-size:11px; color:var(--text-faint);}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    overflow:hidden;
+  }
+
+  /* ---------- Task Item ---------- */
+  .item{
+    display:flex; align-items:flex-start; gap:11px;
+    padding:13px 14px; border-bottom:1px solid var(--border);
+    border-left:3px solid transparent;
+    transition:background 0.15s;
+  }
+  .item:last-child{border-bottom:none;}
+  .item.pending{background:var(--amber-bg); border-left-color:var(--amber);}
+  .item.complete{background:var(--green-bg); border-left-color:var(--green);}
+  .item.urgent{background:var(--red-bg); border-left-color:var(--red);}
+
+  .chk{
+    width:21px; height:21px; border-radius:6px; border:1.5px solid var(--text-faint);
+    flex:none; margin-top:1px; cursor:pointer; background:transparent;
+    display:flex; align-items:center; justify-content:center; font-size:13px; color:transparent;
+  }
+  .item.complete .chk{background:var(--green); border-color:var(--green); color:#04140b;}
+  .item.pending .chk, .item.urgent .chk{border-color:var(--amber);}
+  .item.urgent .chk{border-color:var(--red);}
+
+  .item .body{flex:1; min-width:0;}
+  .item .label{font-size:13.8px; line-height:1.4; color:var(--text);}
+  .item.complete .label{color:var(--text-dim); text-decoration:line-through; text-decoration-color:var(--text-faint);}
+  .item .hint{font-size:11.5px; color:var(--text-dim); margin-top:3px; line-height:1.4;}
+  .item .del{flex:none; background:none; border:none; color:var(--text-faint); font-size:16px; cursor:pointer; padding:2px 4px;}
+  .item .del:hover{color:var(--red);}
+
+  .badge{
+    display:inline-block; font-family:var(--mono); font-size:10px; padding:2px 6px;
+    border-radius:5px; background:var(--surface3); color:var(--text-dim); margin-top:5px; margin-right:5px;
+  }
+
+  /* ---------- Sub-toggle rows (emails etc) ---------- */
+  .subgrid{display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px 14px;}
+  .subgrid .full{grid-column:1/-1; font-size:11.5px; color:var(--text-dim); font-family:var(--mono); margin-top:4px;}
+  .togglechip{
+    display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:9px;
+    background:var(--surface2); border:1px solid var(--border); cursor:pointer; font-size:12.5px;
+  }
+  .togglechip .dot2{width:9px;height:9px;border-radius:50%;background:var(--text-faint); flex:none;}
+  .togglechip.on{background:var(--green-bg); border-color:rgba(62,207,142,0.35);}
+  .togglechip.on .dot2{background:var(--green);}
+
+  /* ---------- Add row ---------- */
+  .addrow{display:flex; gap:8px; padding:12px 14px;}
+  .addrow input, .addrow select{
+    flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:10px 11px; color:var(--text); font-size:13.5px; font-family:var(--sans); min-width:0;
+  }
+  .addrow input::placeholder{color:var(--text-faint);}
+  .btn{
+    background:var(--teal); color:#03191d; border:none; border-radius:8px; padding:10px 14px;
+    font-weight:700; font-size:13px; cursor:pointer; flex:none;
+  }
+  .btn.ghost{background:transparent; border:1px solid var(--border); color:var(--text-dim);}
+  .btn.small{padding:7px 10px; font-size:12px;}
+  .btn:disabled{opacity:0.35; cursor:not-allowed;}
+  .btn.amberbtn{background:var(--amber); color:#20140a;}
+
+  .empty{padding:22px 14px; text-align:center; color:var(--text-faint); font-size:12.5px;}
+
+  /* Two-column source picker */
+  .sourcepick{display:flex; gap:8px; padding:12px 14px 4px 14px;}
+  .sourcepick button{
+    flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:9px;
+    padding:12px 8px; color:var(--text); font-size:12px; font-weight:600; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+  }
+  .sourcepick button .ic{font-size:18px;}
+  .sourcepick button.sel{border-color:var(--teal); background:rgba(56,196,217,0.12); color:var(--teal);}
+
+  /* Notes list */
+  .noteitem{display:flex; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); align-items:flex-start;}
+  .noteitem:last-child{border-bottom:none;}
+  .noteitem .txt{flex:1; font-size:13.3px; line-height:1.45;}
+  .noteitem.done .txt{color:var(--text-dim); text-decoration:line-through;}
+  .noteitem .ts{font-size:10px; color:var(--text-faint); font-family:var(--mono); margin-top:3px;}
+
+  /* Yesterday readonly */
+  .ro-row{display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--border); font-size:13px;}
+  .ro-row:last-child{border-bottom:none;}
+  .ro-row .tick{width:16px; font-size:13px; flex:none;}
+  .ro-row.done{color:var(--text-dim);}
+  .ro-row.miss{color:var(--red);}
+
+  .footer-note{text-align:center; color:var(--text-faint); font-size:11px; padding:24px 10px 6px 10px; font-family:var(--mono);}
+
+  /* ---------- Report form ---------- */
+  .rowline{display:flex; align-items:center; gap:8px; padding:9px 10px; border-bottom:1px solid var(--border);}
+  .rowline:last-child{border-bottom:none;}
+  .rowline input[type=text], .rowline input[type=number]{
+    background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text);
+    padding:8px 9px; font-size:13px; font-family:var(--sans); min-width:0;
+  }
+  .rowline input[type=number]{width:70px; text-align:center;}
+  .rowline select{background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px 9px; font-size:12.5px;}
+  .rowline .rlbl{flex:none; width:34px; font-family:var(--mono); font-size:11px; color:var(--text-faint);}
+  .rowline .grow{flex:1; min-width:0;}
+  .rowline .rmv{flex:none; background:none; border:none; color:var(--text-faint); font-size:15px; cursor:pointer;}
+  .acct2{display:flex; gap:8px; align-items:center;}
+  .acct2 input[type=text]{flex:1;}
+  .acct2 input[type=number]{width:56px;}
+
+  .formfield{padding:10px 14px; border-bottom:1px solid var(--border);}
+  .formfield:last-child{border-bottom:none;}
+  .formfield label{display:block; font-size:11.5px; color:var(--text-dim); margin-bottom:5px; font-family:var(--mono);}
+  .formfield input[type=text], .formfield textarea{
+    width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:9px 10px; color:var(--text); font-size:13.3px; font-family:var(--sans); resize:vertical;
+  }
+  .vehgrid{display:grid; grid-template-columns:repeat(auto-fit, minmax(84px,1fr)); gap:8px; padding:12px 14px;}
+  .vehgrid div{display:flex; flex-direction:column; gap:5px;}
+  .vehgrid label{font-size:11px; color:var(--text-dim); font-family:var(--mono);}
+  .vehgrid input{background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px; text-align:center; font-size:14px;}
+
+  .rowadd{padding:10px 14px;}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 6px 0;}
+  .toolbar .btn{flex:1; min-width:130px; text-align:center;}
+
+  /* ---------- Autocomplete dropdown ---------- */
+  .ac-drop{
+    position:fixed; background:var(--surface2); border:1px solid var(--border); border-radius:9px;
+    max-height:170px; overflow-y:auto; z-index:200; box-shadow:0 10px 26px rgba(0,0,0,0.45);
+  }
+  .ac-drop div{padding:10px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border);}
+  .ac-drop div:last-child{border-bottom:none;}
+  .ac-drop div:hover, .ac-drop div:active{background:var(--surface3);}
+
+  /* ---------- Priority banners ---------- */
+  .banner.danger{background:var(--red-bg); border-color:rgba(224,89,107,0.4);}
+  .banner a.lnk{color:var(--teal); text-decoration:underline; cursor:pointer; font-size:12.5px;}
+
+  /* ---------- Follow-up due badges ---------- */
+  .duebadge{font-family:var(--mono); font-size:10.5px; padding:2px 7px; border-radius:5px; margin-top:5px; display:inline-block;}
+  .duebadge.over{background:rgba(224,89,107,0.18); color:var(--red);}
+  .duebadge.soon{background:rgba(232,163,61,0.18); color:var(--amber);}
+  .duebadge.ok{background:var(--surface3); color:var(--text-dim);}
+
+  .followform{display:flex; flex-direction:column; gap:8px; padding:12px 14px;}
+  .followform input[type=text], .followform input[type=datetime-local]{
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:9px 10px; color:var(--text); font-size:13.3px; font-family:var(--sans); width:100%;
+  }
+  .followform .chkrow{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-dim);}
+
+  /* ---------- Scripts library ---------- */
+  .scriptcard{border-bottom:1px solid var(--border); padding:13px 14px;}
+  .scriptcard:last-child{border-bottom:none;}
+  .scriptcard .stopic{font-weight:700; font-size:13.5px; color:var(--teal); margin-bottom:6px;}
+  .scriptcard .sbody{
+    white-space:pre-wrap; font-size:13px; line-height:1.55; color:var(--text);
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 11px; margin-bottom:8px;
+  }
+  .scriptcard .sactions{display:flex; gap:8px; flex-wrap:wrap;}
+  .scriptcard .sactions button{
+    flex:none; background:var(--surface3); border:1px solid var(--border); color:var(--text-dim);
+    border-radius:7px; padding:6px 11px; font-size:11.5px; font-weight:600; cursor:pointer;
+  }
+  .scriptcard .sactions button.copybtn{color:var(--green); border-color:rgba(62,207,142,0.35);}
+  .scriptcard .sactions button.editbtn{color:var(--amber); border-color:rgba(232,163,61,0.35);}
+  .scriptcard .sactions button.delbtn{color:var(--red); border-color:rgba(224,89,107,0.35);}
+  .scripteditform textarea{
+    width:100%; min-height:110px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); padding:9px 10px; font-size:13px; font-family:var(--sans); resize:vertical; margin-top:6px;
+  }
+
+  @media (max-width:420px){
+    .subgrid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brandrow">
+    <div class="brand">
+      <div class="mark">GC</div>
+      <div>
+        <h1>GetCab</h1>
+        <div class="sub">Operator: Qasim</div>
+      </div>
+    </div>
+    <div class="clockbox">
+      <div class="time" id="clockTime">--:--</div>
+      <div class="date" id="clockDate">-- --- ----</div>
+    </div>
+  </div>
+  <div class="opline">
+    <span>Shift: <b>Evening / Night</b></span>
+    <span>Status: <b id="statusLine">loading…</b></span>
+    <span id="syncBadge">⚪ Checking sync…</span>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="today" class="active">📋 Today</button>
+    <button data-tab="tomorrow">🌙 Tomorrow</button>
+    <button data-tab="yesterday">🕓 Yesterday</button>
+    <button data-tab="notes">📝 Manager Notes</button>
+    <button data-tab="mistakes">⚠️ Mistakes</button>
+    <button data-tab="questions">❓ Questions</button>
+    <button data-tab="followups">⏳ Follow-ups</button>
+    <button data-tab="scripts">📜 Scripts</button>
+    <button data-tab="report">🧾 Report</button>
+  </nav>
+</header>
+
+<main id="main"></main>
+
+<div class="footer-note">GetCab Shift Console — data saved automatically</div>
+
+<script>
+/* ============================================================
+   GetCab Operator Shift Console
+   Persistence via window.storage (personal, per-user)
+   ============================================================ */
+
+const FIXED_TASKS = [
+  {id:'t1', label:'Urgent check — any job in progress right now?', hint:'Driver on-route calls, anything that needs handling this exact second before anything else.'},
+  {id:'t2', label:'Check all 3 inboxes', hint:'info@getcab.uk · booking@getcab.uk · info@myairporttrips.com — Inbox and Sent both.', sub:'emails'},
+  {id:'t3', label:'Check job assignments', hint:'Make sure every job is assigned correctly — nothing wrong, nothing missing.'},
+  {id:'t4', label:'Review tomorrow\'s jobs', hint:'Check every job carefully — remove cancelled ones, add new ones.', sub:'tomorrowlink'},
+  {id:'t5', label:'Check yesterday + pre-shift jobs for No-Shows', hint:'Confirm any No-Show is marked, and proof has been uploaded for it.'},
+  {id:'t6', label:'Today\'s job tracking setup', hint:'Open all flights in one Chrome tab group. Set mobile alarms for town pickups (on-route call time). Open all of today\'s Talixo jobs in one group to mark arrivals on time.', sub:'jobtracking'},
+  {id:'t7', label:'Handle today\'s progressing jobs', hint:'Call companies (Ctrip excluded) about jobs in progress. Track each customer one by one until pickup is done.', sub:'calls'},
+  {id:'t8', label:'Make a note for the manager', hint:'Anything worth flagging at shift close — jot it down as it happens.', sub:'noteslink'},
+  {id:'t9', label:'Send No-Show proof', hint:'For every No-Show today, prepare and upload the proof before closing.', sub:'noshow'},
+];
+
+const todayKey = dateKey(new Date());
+const tomorrowKey = dateKey(addDays(new Date(),1));
+const yesterdayKey = dateKey(addDays(new Date(),-1));
+
+let state = {}; // in-memory cache of loaded day objects, keyed by date string
+let activeTab = 'today';
+
+/* ---------------- Storage layer ----------------
+   Three tiers, tried in order:
+   1. Firebase (if FIREBASE_CONFIG below is filled in) — real sync across every
+      device you open this page on (phone, laptop, anywhere).
+   2. window.storage — only present when running inside Claude.ai itself.
+   3. The browser's own localStorage — works, but is local to THIS device/browser
+      only. This is the fallback that was used before Firebase was set up.
+
+   ===== TO TURN ON CROSS-DEVICE SYNC =====
+   1. Go to https://console.firebase.google.com → Add project (free, no card needed).
+   2. In the project: Build → Firestore Database → Create database → Start in
+      "test mode" for now (we tighten the rule below in a moment).
+   3. Project settings (gear icon) → General → "Your apps" → click the </> (web)
+      icon → register an app (nickname anything) → copy the firebaseConfig object
+      it shows you → paste its values into FIREBASE_CONFIG below.
+   4. Pick your own private APP_KEY below (any random word/string only you know —
+      it keeps your data separate from anyone else who might ever use this same
+      Firebase project). Use the same APP_KEY on every device.
+   5. Back in Firestore → Rules tab, replace the rules with:
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /consoles/{appKey}/entries/{entry} {
+              allow read, write: if appKey == "PASTE_YOUR_APP_KEY_HERE";
+            }
+          }
+        }
+      (replace PASTE_YOUR_APP_KEY_HERE with your real APP_KEY, in quotes) → Publish.
+   6. Re-upload this file to GitHub Pages. Open it on both devices — they'll now
+      share the same data automatically, a few seconds after each change.
+   If you leave FIREBASE_CONFIG empty, the app works exactly as before (saves
+   locally to whichever device you're using, no sync). */
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+const APP_KEY = "qasim-getcab"; // change this to any private word of your choosing
+
+let firestoreDB = null;
+let FIREBASE_READY = false;
+if(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId){
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    firestoreDB = firebase.firestore();
+    FIREBASE_READY = true;
+  }catch(e){ console.error('Firebase init failed', e); FIREBASE_READY = false; }
+}
+
+const HAS_CLOUD_STORAGE = (typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function');
+
+function firestoreDocRef(key){
+  return firestoreDB.collection('consoles').doc(APP_KEY).collection('entries').doc(encodeURIComponent(key));
+}
+
+async function storageGet(key){
+  if(FIREBASE_READY){
+    try{
+      const snap = await firestoreDocRef(key).get();
+      return snap.exists ? { key, value: snap.data().value } : null;
+    }catch(e){ console.error('Firestore read failed', e); return null; }
+  }
+  if(HAS_CLOUD_STORAGE){
+    try{ return await window.storage.get(key, false); }
+    catch(e){ return null; }
+  }
+  try{
+    const v = localStorage.getItem('getcab_'+key);
+    return v!==null ? {key, value:v} : null;
+  }catch(e){ return null; }
+}
+async function storageSet(key, value){
+  if(FIREBASE_READY){
+    try{
+      await firestoreDocRef(key).set({ value, updatedAt: Date.now() });
+      return { key, value };
+    }catch(e){ console.error('Firestore write failed', e); return null; }
+  }
+  if(HAS_CLOUD_STORAGE){
+    try{ return await window.storage.set(key, value, false); }
+    catch(e){ return null; }
+  }
+  try{
+    localStorage.setItem('getcab_'+key, value);
+    return {key, value};
+  }catch(e){ return null; }
+}
+
+function dateKey(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function addDays(d,n){ const c=new Date(d); c.setDate(c.getDate()+n); return c; }
+function prettyDate(key){
+  const [y,m,d]=key.split('-').map(Number);
+  const dt=new Date(y,m-1,d);
+  return dt.toLocaleDateString('en-GB',{weekday:'short', day:'2-digit', month:'short'});
+}
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+function blankDay(){
+  return {
+    checklist: FIXED_TASKS.map(t=>({id:t.id, done:false})),
+    emails: {
+      info:{inbox:false, sent:false},
+      booking:{inbox:false, sent:false},
+      myairporttrips:{inbox:false, sent:false}
+    },
+    jobtracking: {flights:false, alarms:false, talixogroup:false},
+    calls: [],           // {id, name, done}
+    tomorrowLog: [],      // {id, source, text, done}
+    noshows: [],          // {id, ref, proof}
+    customTasks: []        // {id, text, done}
+  };
+}
+
+async function loadDay(key){
+  if(state[key]) return state[key];
+  try{
+    const res = await storageGet('day:'+key);
+    if(res && res.value){
+      const parsed = JSON.parse(res.value);
+      state[key] = Object.assign(blankDay(), parsed);
+      // deep-merge nested defaults in case schema grew
+      state[key].emails = Object.assign(blankDay().emails, parsed.emails||{});
+      state[key].jobtracking = Object.assign(blankDay().jobtracking, parsed.jobtracking||{});
+    } else {
+      state[key] = blankDay();
+    }
+  }catch(e){
+    state[key] = blankDay();
+  }
+  return state[key];
+}
+
+async function saveDay(key){
+  try{
+    await storageSet('day:'+key, JSON.stringify(state[key]));
+  }catch(e){ console.error('save failed', e); }
+}
+
+async function loadNotes(){
+  try{
+    const res = await storageGet('managerNotes');
+    const notes = (res && res.value) ? JSON.parse(res.value) : [];
+    window.__notesCache = notes;
+    return notes;
+  }catch(e){ return []; }
+}
+async function saveNotes(notes){
+  window.__notesCache = notes;
+  try{ await storageSet('managerNotes', JSON.stringify(notes)); }catch(e){}
+}
+
+/* ---------------- Persistent lists: Mistakes / Questions / Follow-ups ---------------- */
+async function loadMistakes(){
+  try{ const res = await storageGet('mistakesLog'); return res && res.value ? JSON.parse(res.value) : []; }
+  catch(e){ return []; }
+}
+async function saveMistakes(list){ try{ await storageSet('mistakesLog', JSON.stringify(list)); }catch(e){} }
+
+async function loadQuestions(){
+  try{ const res = await storageGet('questionsLog'); return res && res.value ? JSON.parse(res.value) : []; }
+  catch(e){ return []; }
+}
+async function saveQuestions(list){ try{ await storageSet('questionsLog', JSON.stringify(list)); }catch(e){} }
+
+async function loadFollowups(){
+  try{ const res = await storageGet('followupsLog'); return res && res.value ? JSON.parse(res.value) : []; }
+  catch(e){ return []; }
+}
+async function saveFollowups(list){ try{ await storageSet('followupsLog', JSON.stringify(list)); }catch(e){} }
+
+/* ---------------- Scripts library ---------------- */
+async function loadScripts(){
+  try{ const res = await storageGet('scriptsLib'); return res && res.value ? JSON.parse(res.value) : []; }
+  catch(e){ return []; }
+}
+async function saveScripts(list){ try{ await storageSet('scriptsLib', JSON.stringify(list)); }catch(e){} }
+
+/* ---------------- Autocomplete / word suggestions ---------------- */
+async function loadSuggestionsOnce(){
+  if(window.__suggestions) return;
+  try{
+    const res = await storageGet('suggestions');
+    window.__suggestions = (res && res.value) ? JSON.parse(res.value) : {};
+  }catch(e){ window.__suggestions = {}; }
+}
+function recordSuggestion(key, value){
+  value = (value||'').trim();
+  if(!value) return;
+  window.__suggestions = window.__suggestions || {};
+  const arr = window.__suggestions[key] = window.__suggestions[key] || [];
+  if(!arr.some(s=>s.toLowerCase()===value.toLowerCase())){
+    arr.unshift(value);
+    if(arr.length>30) arr.length = 30;
+    storageSet('suggestions', JSON.stringify(window.__suggestions));
+  }
+}
+function ensureAcDropdown(){
+  let d = document.getElementById('acDropShared');
+  if(!d){
+    d = document.createElement('div');
+    d.id = 'acDropShared';
+    d.className = 'ac-drop';
+    d.style.display = 'none';
+    document.body.appendChild(d);
+  }
+  return d;
+}
+function showSuggestions(el, key){
+  const all = (window.__suggestions && window.__suggestions[key]) || [];
+  const val = el.value.trim().toLowerCase();
+  let matches = all.filter(s=>s.toLowerCase()!==val);
+  if(val) matches = matches.filter(s=>s.toLowerCase().includes(val));
+  matches = matches.slice(0,6);
+  const drop = ensureAcDropdown();
+  if(matches.length===0){ drop.style.display='none'; return; }
+  drop.innerHTML = matches.map(s=>`<div data-val="${escapeAttr(s)}">${escapeHtml(s)}</div>`).join('');
+  const rect = el.getBoundingClientRect();
+  drop.style.left = Math.max(8, rect.left)+'px';
+  drop.style.top = (rect.bottom+6)+'px';
+  drop.style.width = rect.width+'px';
+  drop.style.display = 'block';
+  drop.onmousedown = (e)=>{
+    const item = e.target.closest('[data-val]');
+    if(!item) return;
+    e.preventDefault();
+    el.value = item.dataset.val;
+    el.dispatchEvent(new Event('input'));
+    drop.style.display='none';
+  };
+}
+function hideSuggestionsDelayed(){
+  setTimeout(()=>{ const d=document.getElementById('acDropShared'); if(d) d.style.display='none'; }, 150);
+}
+function attachAutocomplete(el, key){
+  if(!el || el.dataset.acBound) return;
+  el.dataset.acBound = '1';
+  el.addEventListener('focus', ()=>showSuggestions(el,key));
+  el.addEventListener('input', ()=>showSuggestions(el,key));
+  el.addEventListener('blur', ()=>{ hideSuggestionsDelayed(); recordSuggestion(key, el.value); });
+}
+
+/* ---------------- Clock ---------------- */
+function tickClock(){
+  const now = new Date();
+  document.getElementById('clockTime').textContent = now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('clockDate').textContent = now.toLocaleDateString('en-GB',{weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+}
+setInterval(tickClock, 1000*20);
+
+/* ---------------- Completion helpers ---------------- */
+function isTodayFullyDone(day){
+  const fixedDone = day.checklist.every(c=>c.done);
+  const customDone = day.customTasks.every(c=>c.done);
+  return fixedDone && customDone;
+}
+function pendingSummary(day){
+  const items = [];
+  day.checklist.forEach(c=>{
+    if(!c.done){
+      const meta = FIXED_TASKS.find(f=>f.id===c.id);
+      items.push(meta.label);
+    }
+  });
+  day.customTasks.forEach(c=>{ if(!c.done) items.push(c.text); });
+  return items;
+}
+
+/* ---------------- Render: Today ---------------- */
+async function renderToday(){
+  const day = await loadDay(todayKey);
+  const doneCount = day.checklist.filter(c=>c.done).length;
+  let html = '';
+
+  const [mistakes, followups] = await Promise.all([loadMistakes(), loadFollowups()]);
+  const dueNow = followups.filter(f=>!f.done && f.dueAt && new Date(f.dueAt)<=new Date());
+  if(dueNow.length>0){
+    html += `<div class="banner danger"><div class="ico">⏰</div><div><b>${dueNow.length} follow-up task(s) due now</b>
+      <ul>${dueNow.slice(0,4).map(f=>`<li>${escapeHtml(f.text)}</li>`).join('')}</ul>
+      <span class="lnk" data-action="gotoTab" data-tab="followups">Open Follow-ups tab →</span>
+    </div></div>`;
+  }
+  if(mistakes.length>0){
+    html += `<div class="banner warn"><div class="ico">⚠️</div><div><b>${mistakes.length} mistake(s) still being worked on</b>Keep an eye on these until they're fixed.
+      <span class="lnk" data-action="gotoTab" data-tab="mistakes"> Open Mistakes tab →</span>
+    </div></div>`;
+  }
+
+  html += sectionOpen('Daily Checklist', doneCount+' / '+FIXED_TASKS.length);
+  html += '<div class="card">';
+  FIXED_TASKS.forEach((t,i)=>{
+    const st = day.checklist.find(c=>c.id===t.id);
+    const cls = st.done ? 'complete' : (i===0 ? 'urgent':'pending');
+    html += `<div class="item ${st.done?'complete':cls}">
+      <button class="chk" data-action="toggleFixed" data-id="${t.id}">${st.done?'✓':''}</button>
+      <div class="body">
+        <div class="label">${t.label}</div>
+        <div class="hint">${t.hint}</div>
+        ${renderSub(t.sub, day)}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  html += sectionClose();
+
+  // Custom extra tasks for today
+  html += sectionOpen('Extra Tasks — Today', day.customTasks.length+'');
+  html += '<div class="card">';
+  if(day.customTasks.length===0){
+    html += '<div class="empty">No extra tasks added for today.</div>';
+  } else {
+    day.customTasks.forEach(c=>{
+      html += `<div class="item ${c.done?'complete':'pending'}">
+        <button class="chk" data-action="toggleCustom" data-scope="today" data-id="${c.id}">${c.done?'✓':''}</button>
+        <div class="body"><div class="label">${escapeHtml(c.text)}</div></div>
+        <button class="del" data-action="delCustom" data-scope="today" data-id="${c.id}">✕</button>
+      </div>`;
+    });
+  }
+  html += `<div class="addrow">
+    <input type="text" id="addTodayInput" placeholder="Add an extra task for today…">
+    <button class="btn" data-action="addCustomToday">Add</button>
+  </div>`;
+  html += '</div>';
+  html += sectionClose();
+
+  document.getElementById('main').innerHTML = html;
+  document.getElementById('statusLine').textContent = isTodayFullyDone(day) ? 'All done ✓' : `${FIXED_TASKS.length + day.customTasks.length - doneCount - day.customTasks.filter(c=>c.done).length} pending`;
+}
+
+function renderSub(sub, day){
+  if(sub==='emails'){
+    const accounts = [
+      {key:'info', label:'info@getcab.uk'},
+      {key:'booking', label:'booking@getcab.uk'},
+      {key:'myairporttrips', label:'myairporttrips.com'}
+    ];
+    let g = '<div class="subgrid">';
+    accounts.forEach(a=>{
+      const inboxOn = day.emails[a.key].inbox;
+      const sentOn = day.emails[a.key].sent;
+      g += `<div class="togglechip ${inboxOn?'on':''}" data-action="toggleEmail" data-acc="${a.key}" data-part="inbox"><span class="dot2"></span>${a.label} — Inbox</div>`;
+      g += `<div class="togglechip ${sentOn?'on':''}" data-action="toggleEmail" data-acc="${a.key}" data-part="sent"><span class="dot2"></span>${a.label} — Sent</div>`;
+    });
+    g += '</div>';
+    return g;
+  }
+  if(sub==='jobtracking'){
+    const jt = day.jobtracking;
+    return `<div class="subgrid">
+      <div class="togglechip ${jt.flights?'on':''}" data-action="toggleJT" data-part="flights"><span class="dot2"></span>Flights opened (tab group)</div>
+      <div class="togglechip ${jt.alarms?'on':''}" data-action="toggleJT" data-part="alarms"><span class="dot2"></span>Town pickup alarms set</div>
+      <div class="togglechip ${jt.talixogroup?'on':''}" data-action="toggleJT" data-part="talixogroup" style="grid-column:1/-1;"><span class="dot2"></span>Talixo — today's jobs opened in group (for arrival marking)</div>
+    </div>`;
+  }
+  if(sub==='calls'){
+    let c = '<div class="card" style="margin-top:10px; border-color:var(--border);">';
+    if(day.calls.length===0){
+      c += '<div class="empty">No customers added yet. Add each one you need to call.</div>';
+    } else {
+      day.calls.forEach((call,idx)=>{
+        c += `<div class="item ${call.done?'complete':'pending'}">
+          <button class="chk" data-action="toggleCall" data-id="${call.id}">${call.done?'✓':''}</button>
+          <div class="body"><div class="label">${idx+1}. ${escapeHtml(call.name)}</div></div>
+          <button class="del" data-action="delCall" data-id="${call.id}">✕</button>
+        </div>`;
+      });
+    }
+    c += `<div class="addrow">
+      <input type="text" id="addCallInput" placeholder="Customer name / ref…">
+      <button class="btn" data-action="addCall">Add</button>
+    </div></div>`;
+    return c;
+  }
+  if(sub==='noshow'){
+    let c = '<div class="card" style="margin-top:10px; border-color:var(--border);">';
+    if(day.noshows.length===0){
+      c += '<div class="empty">No No-Shows logged for today yet.</div>';
+    } else {
+      day.noshows.forEach(ns=>{
+        c += `<div class="item ${ns.proof?'complete':'urgent'}">
+          <button class="chk" data-action="toggleNoShowProof" data-id="${ns.id}">${ns.proof?'✓':''}</button>
+          <div class="body"><div class="label">Ref: ${escapeHtml(ns.ref)}</div><div class="hint">${ns.proof?'Proof uploaded':'Proof NOT uploaded yet'}</div></div>
+          <button class="del" data-action="delNoShow" data-id="${ns.id}">✕</button>
+        </div>`;
+      });
+    }
+    c += `<div class="addrow">
+      <input type="text" id="addNoShowInput" placeholder="Booking reference…">
+      <button class="btn amberbtn" data-action="addNoShow">Log No-Show</button>
+    </div></div>`;
+    return c;
+  }
+  if(sub==='tomorrowlink'){
+    return `<div style="margin-top:8px;"><button class="btn ghost small" data-action="gotoTab" data-tab="tomorrow">Open Tomorrow tab →</button></div>`;
+  }
+  if(sub==='noteslink'){
+    return `<div style="margin-top:8px;"><button class="btn ghost small" data-action="gotoTab" data-tab="notes">Open Manager Notes →</button></div>`;
+  }
+  return '';
+}
+
+/* ---------------- Render: Tomorrow ---------------- */
+async function renderTomorrow(){
+  const today = await loadDay(todayKey);
+  const day = await loadDay(tomorrowKey);
+  const blocked = !isTodayFullyDone(today);
+
+  let html = '';
+  if(blocked){
+    const pend = pendingSummary(today);
+    html += `<div class="banner">
+      <div class="ico">🔒</div>
+      <div>
+        <b>Today's tasks aren't finished yet</b>
+        Finish today's checklist first — tomorrow's tasks stay locked until then.
+        <ul>${pend.slice(0,5).map(p=>`<li>${escapeHtml(p)}</li>`).join('')}</ul>
+      </div>
+    </div>`;
+  }
+
+  html += sectionOpen('Tomorrow — '+prettyDate(tomorrowKey), '');
+  html += `<div class="card">
+    <div class="item ${day.jobtracking.reviewed?'complete':'pending'}">
+      <button class="chk" data-action="toggleTomorrowReview" ${blocked?'disabled':''}>${day.jobtracking.reviewed?'✓':''}</button>
+      <div class="body"><div class="label">Reviewed all of tomorrow's jobs</div><div class="hint">Checked every job — removed cancelled ones, added new ones.</div></div>
+    </div>
+  </div>`;
+  html += sectionClose();
+
+  html += sectionOpen('Job Log — where each booking came from', day.tomorrowLog.length+'');
+  html += '<div class="card">';
+  html += `<div class="sourcepick">
+      <button class="${''}" data-action="pickSource" data-source="gmail">
+        <span class="ic">📧</span> Gmail booking
+      </button>
+      <button class="${''}" data-action="pickSource" data-source="partner">
+        <span class="ic">🔗</span> Partner portal
+      </button>
+    </div>`;
+  html += `<div class="addrow">
+    <input type="text" id="addTomorrowInput" placeholder="Ref / customer / route…" ${blocked?'disabled':''}>
+    <button class="btn" data-action="addTomorrowLog" ${blocked?'disabled':''}>Log</button>
+  </div>`;
+  if(day.tomorrowLog.length>0){
+    day.tomorrowLog.forEach(l=>{
+      html += `<div class="item ${l.done?'complete':'pending'}">
+        <button class="chk" data-action="toggleTomorrowLog" data-id="${l.id}" ${blocked?'disabled':''}>${l.done?'✓':''}</button>
+        <div class="body">
+          <div class="label">${escapeHtml(l.text)}</div>
+          <span class="badge">${l.source==='gmail'?'📧 Gmail':'🔗 Partner Portal'}</span>
+        </div>
+        <button class="del" data-action="delTomorrowLog" data-id="${l.id}" ${blocked?'disabled':''}>✕</button>
+      </div>`;
+    });
+  }
+  html += '</div>';
+  html += sectionClose();
+
+  document.getElementById('main').innerHTML = html;
+  window.__pickedSource = window.__pickedSource || 'gmail';
+  highlightSource();
+}
+function highlightSource(){
+  document.querySelectorAll('[data-action="pickSource"]').forEach(b=>{
+    b.classList.toggle('sel', b.dataset.source===window.__pickedSource);
+  });
+}
+
+/* ---------------- Render: Yesterday ---------------- */
+async function renderYesterday(){
+  const day = await loadDay(yesterdayKey);
+  let html = sectionOpen('Yesterday — '+prettyDate(yesterdayKey), '');
+  html += '<div class="card">';
+  FIXED_TASKS.forEach(t=>{
+    const st = day.checklist.find(c=>c.id===t.id);
+    html += `<div class="ro-row ${st.done?'done':'miss'}"><span class="tick">${st.done?'✓':'✕'}</span>${t.label}</div>`;
+  });
+  html += '</div>';
+  html += sectionClose();
+
+  const openNoShows = day.noshows.filter(n=>!n.proof);
+  if(day.noshows.length>0){
+    html += sectionOpen('No-Shows logged yesterday', day.noshows.length+'');
+    html += '<div class="card">';
+    day.noshows.forEach(ns=>{
+      html += `<div class="ro-row ${ns.proof?'done':'miss'}"><span class="tick">${ns.proof?'✓':'✕'}</span>Ref: ${escapeHtml(ns.ref)} — ${ns.proof?'proof uploaded':'proof missing'}</div>`;
+    });
+    html += '</div>';
+    html += sectionClose();
+    if(openNoShows.length>0){
+      html += `<div class="banner warn"><div class="ico">⚠️</div><div><b>${openNoShows.length} No-Show(s) from yesterday still missing proof</b>Upload proof for these before they get buried.</div></div>`;
+    }
+  }
+
+  document.getElementById('main').innerHTML = html;
+}
+
+/* ---------------- Render: Notes ---------------- */
+async function renderNotes(){
+  const notes = await loadNotes();
+  let html = sectionOpen('Things to tell the manager', notes.length+'');
+  html += '<div class="card">';
+  if(notes.length===0){
+    html += '<div class="empty">Nothing noted yet. Add anything worth flagging as it happens.</div>';
+  } else {
+    notes.slice().reverse().forEach(n=>{
+      html += `<div class="noteitem ${n.done?'done':''}">
+        <button class="chk" data-action="toggleNote" data-id="${n.id}" style="margin-top:2px;">${n.done?'✓':''}</button>
+        <div class="txt">${escapeHtml(n.text)}<div class="ts">${n.ts}</div></div>
+        <button class="del" data-action="delNote" data-id="${n.id}">✕</button>
+      </div>`;
+    });
+  }
+  html += `<div class="addrow">
+    <input type="text" id="addNoteInput" placeholder="Note for manager…">
+    <button class="btn" data-action="addNote">Add</button>
+  </div>`;
+  html += '</div>';
+  html += sectionClose();
+  html += `<div class="toolbar">
+    <button class="btn ghost" data-action="openNotesWindow">🗒️ Open all notes in new tab</button>
+    <button class="btn ghost" data-action="clearNotesDone">Clear told/ticked notes</button>
+  </div>`;
+
+  document.getElementById('main').innerHTML = html;
+}
+
+/* ---------------- Notes: standalone editable window ---------------- */
+async function openNotesWindow(){
+  await loadNotes(); // ensure cache is fresh before the child window reads it
+  const w = window.open('', '_blank', 'width=460,height=720');
+  if(!w){ alert('Please allow pop-ups to open notes in a new tab.'); return; }
+  w.document.open();
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GetCab — All Manager Notes</title>
+  <style>
+    :root{--bg:#0d1117;--surface:#141b23;--surface2:#1b232d;--border:#28313d;--text:#e7edf3;--text-dim:#8b97a5;--green:#3ecf8e;--teal:#38c4d9;}
+    *{box-sizing:border-box;}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,sans-serif;padding:16px;}
+    h1{font-size:16px;margin:0 0 4px 0;}
+    p.sub{color:var(--text-dim);font-size:12px;margin:0 0 16px 0;}
+    .n{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;}
+    .n textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);
+      font-size:13.5px;padding:8px;font-family:inherit;min-height:52px;resize:vertical;}
+    .n .row{display:flex;align-items:center;justify-content:space-between;margin-top:7px;}
+    .n .ts{color:var(--text-dim);font-size:10.5px;font-family:ui-monospace,monospace;}
+    .n label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);}
+    button{cursor:pointer;border:none;border-radius:7px;font-weight:600;font-size:12.5px;padding:8px 12px;}
+    .save{background:var(--teal);color:#03191d;}
+    .del{background:transparent;color:#e0596b;border:1px solid #4a2429;}
+    .addbtn{background:var(--green);color:#04140b;width:100%;padding:11px;font-size:13px;margin-top:6px;}
+    .empty{text-align:center;color:var(--text-dim);font-size:12.5px;padding:30px 0;}
+  </style></head>
+  <body>
+    <h1>All Manager Notes</h1>
+    <p class="sub">Read, edit and save your notes here. Changes sync back to the dashboard.</p>
+    <div id="list"></div>
+    <button class="addbtn" id="addBtn">+ Add new note</button>
+  <script>
+    function renderList(notes){
+      const list = document.getElementById('list');
+      if(notes.length===0){ list.innerHTML = '<div class="empty">No notes yet.</div>'; return; }
+      list.innerHTML = notes.slice().reverse().map(n => \`
+        <div class="n" data-id="\${n.id}">
+          <textarea>\${n.text.replace(/</g,'&lt;')}</textarea>
+          <div class="row">
+            <label><input type="checkbox" \${n.done?'checked':''} class="doneChk"> told manager</label>
+            <span class="ts">\${n.ts}</span>
+          </div>
+          <div class="row">
+            <button class="save">Save</button>
+            <button class="del">Delete</button>
+          </div>
+        </div>\`).join('');
+    }
+    function load(){ renderList(window.opener.__getNotesSync()); }
+    document.getElementById('list').addEventListener('click', (e)=>{
+      const card = e.target.closest('.n');
+      if(!card) return;
+      const id = card.dataset.id;
+      if(e.target.classList.contains('save')){
+        const text = card.querySelector('textarea').value.trim();
+        const done = card.querySelector('.doneChk').checked;
+        window.opener.__updateNoteSync(id, text, done);
+        load();
+      }
+      if(e.target.classList.contains('del')){
+        window.opener.__deleteNoteSync(id);
+        load();
+      }
+    });
+    document.getElementById('addBtn').addEventListener('click', ()=>{
+      const text = prompt('New note:');
+      if(text && text.trim()){
+        window.opener.__addNoteSync(text.trim());
+        load();
+      }
+    });
+    load();
+  <\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+/* Sync bridge used by the standalone notes window (window.opener calls) */
+window.__getNotesSync = function(){ return window.__notesCache || []; };
+window.__addNoteSync = async function(text){
+  const notes = await loadNotes();
+  notes.push({id:uid(), text, done:false, ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
+  window.__notesCache = notes;
+  await saveNotes(notes);
+  if(activeTab==='notes') render();
+};
+window.__updateNoteSync = async function(id, text, done){
+  const notes = await loadNotes();
+  const n = notes.find(x=>x.id===id);
+  if(n){ n.text = text; n.done = done; }
+  window.__notesCache = notes;
+  await saveNotes(notes);
+  if(activeTab==='notes') render();
+};
+window.__deleteNoteSync = async function(id){
+  let notes = await loadNotes();
+  notes = notes.filter(x=>x.id!==id);
+  window.__notesCache = notes;
+  await saveNotes(notes);
+  if(activeTab==='notes') render();
+};
+
+/* ---------------- Render: Mistakes ---------------- */
+async function renderMistakes(){
+  const list = await loadMistakes();
+  let html = `<div class="banner danger"><div class="ico">⚠️</div><div><b>Your mistakes list</b>Stays here permanently — nothing auto-deletes. Remove an item yourself once you've actually fixed it.</div></div>`;
+  html += sectionOpen('Mistakes to work on', list.length+'');
+  html += '<div class="card">';
+  if(list.length===0){
+    html += '<div class="empty">Nothing logged — good shift so far.</div>';
+  } else {
+    list.slice().reverse().forEach(m=>{
+      html += `<div class="noteitem">
+        <div class="txt">${escapeHtml(m.text)}<div class="ts">${m.ts}</div></div>
+        <button class="del" data-action="delMistake" data-id="${m.id}">✕</button>
+      </div>`;
+    });
+  }
+  html += `<div class="addrow">
+    <input type="text" id="addMistakeInput" placeholder="What did you get wrong…">
+    <button class="btn" data-action="addMistake">Add</button>
+  </div></div>`;
+  html += sectionClose();
+
+  document.getElementById('main').innerHTML = html;
+  attachAutocomplete(document.getElementById('addMistakeInput'), 'mistake');
+}
+
+/* ---------------- Render: Questions ---------------- */
+async function renderQuestions(){
+  const list = await loadQuestions();
+  const open = list.filter(q=>!q.done);
+  const answered = list.filter(q=>q.done);
+  let html = sectionOpen('Questions for the team', open.length+' open');
+  html += '<div class="card">';
+  if(open.length===0){
+    html += '<div class="empty">No open questions.</div>';
+  } else {
+    open.slice().reverse().forEach(q=>{
+      html += `<div class="item pending">
+        <button class="chk" data-action="toggleQuestion" data-id="${q.id}"></button>
+        <div class="body"><div class="label">${escapeHtml(q.text)}</div><div class="hint">${q.ts}</div></div>
+        <button class="del" data-action="delQuestion" data-id="${q.id}">✕</button>
+      </div>`;
+    });
+  }
+  html += `<div class="addrow">
+    <input type="text" id="addQuestionInput" placeholder="What do you need to ask…">
+    <button class="btn" data-action="addQuestion">Add</button>
+  </div></div>`;
+  html += sectionClose();
+
+  if(answered.length>0){
+    html += sectionOpen('Answered', answered.length+'');
+    html += '<div class="card">';
+    answered.slice().reverse().forEach(q=>{
+      html += `<div class="item complete">
+        <button class="chk" data-action="toggleQuestion" data-id="${q.id}">✓</button>
+        <div class="body"><div class="label">${escapeHtml(q.text)}</div></div>
+        <button class="del" data-action="delQuestion" data-id="${q.id}">✕</button>
+      </div>`;
+    });
+    html += '</div>';
+    html += sectionClose();
+  }
+
+  document.getElementById('main').innerHTML = html;
+  attachAutocomplete(document.getElementById('addQuestionInput'), 'question');
+}
+
+/* ---------------- Render: Follow-ups ---------------- */
+function followupDueInfo(f){
+  if(!f.dueAt) return {cls:'ok', text:'No due time set'};
+  const due = new Date(f.dueAt);
+  const now = new Date();
+  const diffMin = (due-now)/60000;
+  const label = due.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  if(diffMin<=0) return {cls:'over', text:'Overdue — was due '+label};
+  if(diffMin<=60) return {cls:'soon', text:'Due soon — '+label};
+  return {cls:'ok', text:'Due '+label};
+}
+async function renderFollowups(){
+  const list = await loadFollowups();
+  const open = list.filter(f=>!f.done);
+  const done = list.filter(f=>f.done);
+  const dueNow = open.filter(f=>f.dueAt && new Date(f.dueAt)<=new Date());
+
+  let html = '';
+  if(dueNow.length>0){
+    html += `<div class="banner danger"><div class="ico">⏰</div><div><b>${dueNow.length} task(s) due now</b>These need attention or their time has come.</div></div>`;
+  }
+
+  html += sectionOpen('Add a follow-up / pending task','');
+  html += `<div class="card"><div class="followform">
+    <input type="text" id="addFollowupText" placeholder="What needs to be done…">
+    <input type="datetime-local" id="addFollowupDue">
+    <label class="chkrow"><input type="checkbox" id="addFollowupApproval"> Needs manager approval</label>
+    <button class="btn" data-action="addFollowup">Add to Follow-ups</button>
+  </div></div>`;
+  html += sectionClose();
+
+  html += sectionOpen('Pending', open.length+'');
+  html += '<div class="card">';
+  if(open.length===0){
+    html += '<div class="empty">Nothing pending right now.</div>';
+  } else {
+    open.slice().reverse().forEach(f=>{
+      const info = followupDueInfo(f);
+      const cardCls = info.cls==='over' ? 'urgent' : 'pending';
+      html += `<div class="item ${cardCls}">
+        <button class="chk" data-action="toggleFollowup" data-id="${f.id}"></button>
+        <div class="body">
+          <div class="label">${escapeHtml(f.text)}</div>
+          <span class="duebadge ${info.cls}">${info.text}</span>
+          ${f.needsApproval ? '<span class="badge">Needs manager approval</span>' : ''}
+        </div>
+        <button class="del" data-action="delFollowup" data-id="${f.id}">✕</button>
+      </div>`;
+    });
+  }
+  html += '</div>';
+  html += sectionClose();
+
+  if(done.length>0){
+    html += sectionOpen('Completed', done.length+'');
+    html += '<div class="card">';
+    done.slice().reverse().forEach(f=>{
+      html += `<div class="item complete">
+        <button class="chk" data-action="toggleFollowup" data-id="${f.id}">✓</button>
+        <div class="body"><div class="label">${escapeHtml(f.text)}</div></div>
+        <button class="del" data-action="delFollowup" data-id="${f.id}">✕</button>
+      </div>`;
+    });
+    html += '</div>';
+    html += sectionClose();
+  }
+
+  document.getElementById('main').innerHTML = html;
+  attachAutocomplete(document.getElementById('addFollowupText'), 'followup');
+}
+
+/* ---------------- Render: Scripts library ---------------- */
+function scriptResultsHTML(){
+  const list = window.__scriptsCache || [];
+  const filter = (window.__scriptsFilter || '').toLowerCase();
+  const filtered = filter
+    ? list.filter(s => s.topic.toLowerCase().includes(filter) || s.body.toLowerCase().includes(filter))
+    : list;
+
+  let html = sectionOpen(filter ? `Results for "${escapeHtml(window.__scriptsFilter)}"` : 'All saved scripts', filtered.length+'');
+  html += '<div class="card">';
+  if(filtered.length===0){
+    html += `<div class="empty">${list.length===0 ? 'No scripts saved yet.' : 'No match for that topic.'}</div>`;
+  } else {
+    filtered.slice().reverse().forEach(s=>{
+      if(window.__editingScriptId === s.id){
+        html += `<div class="scriptcard scripteditform" data-id="${s.id}">
+          <input type="text" class="editTopic" value="${escapeAttr(s.topic)}" style="width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:9px 10px; font-size:13.5px;">
+          <textarea class="editBody">${escapeHtml(s.body)}</textarea>
+          <div class="sactions" style="margin-top:8px;">
+            <button class="copybtn" data-action="saveEditScript" data-id="${s.id}">Save changes</button>
+            <button data-action="cancelEditScript">Cancel</button>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="scriptcard" data-id="${s.id}">
+          <div class="stopic">${escapeHtml(s.topic)}</div>
+          <div class="sbody">${escapeHtml(s.body)}</div>
+          <div class="sactions">
+            <button class="copybtn" data-action="copyScript" data-id="${s.id}">📋 Copy</button>
+            <button class="editbtn" data-action="editScript" data-id="${s.id}">✎ Edit</button>
+            <button class="delbtn" data-action="delScript" data-id="${s.id}">🗑 Delete</button>
+          </div>
+        </div>`;
+      }
+    });
+  }
+  html += '</div>';
+  html += sectionClose();
+  return html;
+}
+
+function refreshScriptResultsOnly(){
+  const wrap = document.getElementById('scriptResultsWrap');
+  if(wrap){ wrap.innerHTML = scriptResultsHTML(); return true; }
+  return false;
+}
+
+async function renderScripts(){
+  if(!window.__scriptsCache) window.__scriptsCache = await loadScripts();
+  const list = window.__scriptsCache;
+
+  let html = `<div class="banner warn"><div class="ico">📜</div><div><b>Your script library</b>Ask Claude for a script in chat, then save the ones you like here under a topic. Next time, just search the topic to pull it up — no need to ask again.</div></div>`;
+
+  html += sectionOpen('Search scripts', list.length+' saved');
+  html += `<div class="card"><div class="addrow">
+    <input type="text" id="scriptSearchInput" placeholder="Type a topic or issue…" value="${escapeAttr(window.__scriptsFilter||'')}">
+    <button class="btn ghost small" data-action="clearScriptSearch">Clear</button>
+  </div></div>`;
+  html += sectionClose();
+
+  html += sectionOpen('Add a new script','');
+  html += `<div class="card"><div class="addrow" style="flex-direction:column; align-items:stretch;">
+    <input type="text" id="addScriptTopic" placeholder="Topic (e.g. Talixo - Flight Cancelled)">
+    <textarea id="addScriptBody" placeholder="Paste the script here…" style="min-height:100px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:9px 10px; font-size:13px; font-family:inherit; resize:vertical;"></textarea>
+    <button class="btn" data-action="addScript" style="align-self:flex-start;">💾 Save script</button>
+  </div></div>`;
+  html += sectionClose();
+
+  html += `<div id="scriptResultsWrap">${scriptResultsHTML()}</div>`;
+
+  document.getElementById('main').innerHTML = html;
+  attachAutocomplete(document.getElementById('addScriptTopic'), 'scriptTopic');
+}
+
+/* ---------------- Render: Report ---------------- */
+const DEFAULT_PARTNERS = [
+  'Myairporttrips','Book Taxi London','Getcab Talixo','Air cabio','Mydaytrip','Mycab',
+  'Weby','InpeTransfer','Travel Thru','Stadt','Trip.Com','Ridex','Sdirect','Via to Via',
+  'Pho/Minicabit','Zip Transfers','Taxi2Cardiff','ConnectCar','Getcab Direct','Slick Bus'
+];
+
+async function buildAutoReport(){
+  const day = await loadDay(todayKey);
+  const checklistRows = FIXED_TASKS.map(t=>{
+    const st = day.checklist.find(c=>c.id===t.id);
+    return {label:t.label, status: st.done ? 'DONE' : 'PENDING'};
+  });
+  const jobAdded = day.tomorrowLog.map((l,i)=>({
+    num: i+1, partner: l.source==='gmail' ? 'Gmail' : 'Partner Portal', status: l.done ? 'ASSIGNED' : 'ADDED'
+  }));
+  const incidents = [];
+  if(day.calls.length>0){
+    incidents.push({type:'Customer Calls', details: `${day.calls.filter(c=>c.done).length} / ${day.calls.length} customers called — ${day.calls.map(c=>c.name).join(', ')}`});
+  }
+  day.noshows.forEach(ns=>{
+    incidents.push({type:'No Show', details: `Ref ${ns.ref} — ${ns.proof?'proof uploaded':'proof PENDING'}`});
+  });
+  return {
+    date: new Date().toLocaleDateString('en-GB'),
+    operator: 'Qasim',
+    shift: 'Evening / Night',
+    accounts: DEFAULT_PARTNERS.map(p=>({name:p, jobs:0})),
+    checklist: checklistRows,
+    talixoUnmarked: '',
+    lastMinuteCancellations: String(day.noshows.length),
+    issues: {flight:'', postcode:'', contact:'', childseat:''},
+    vehicles: {saloon:0, mpv:0, minivan:0, estate:0, minibus:0, executive:0},
+    jobAdded: jobAdded,
+    incidents: incidents
+  };
+}
+
+async function renderReport(){
+  if(!window.__reportDraft){
+    const saved = await storageGet('reportDraft:'+todayKey);
+    window.__reportDraft = saved && saved.value ? JSON.parse(saved.value) : await buildAutoReport();
+  }
+  const r = window.__reportDraft;
+
+  let html = `<div class="banner warn"><div class="ico">🧾</div><div><b>Daily report builder</b>Most fields auto-fill from what you track above. Edit anything, then generate the PDF — manager notes are kept private and never included.</div></div>`;
+
+  html += sectionOpen('Report Header','');
+  html += `<div class="card">
+    <div class="formfield"><label>DATE</label><input type="text" id="rf_date" value="${escapeAttr(r.date)}"></div>
+    <div class="formfield"><label>OPERATOR</label><input type="text" id="rf_operator" value="${escapeAttr(r.operator)}"></div>
+    <div class="formfield"><label>SHIFT</label><input type="text" id="rf_shift" value="${escapeAttr(r.shift)}"></div>
+  </div>`;
+  html += sectionClose();
+
+  html += sectionOpen('Accounts & Jobs Count', r.accounts.length+'');
+  html += '<div class="card" id="acctTable">';
+  r.accounts.forEach((a,i)=>{
+    html += `<div class="rowline" data-idx="${i}">
+      <div class="acct2">
+        <input type="text" class="grow acctName" value="${escapeAttr(a.name)}" placeholder="Partner name">
+        <input type="number" class="acctJobs" value="${a.jobs}" min="0">
+      </div>
+      <button class="rmv" data-action="rmAcctRow">✕</button>
+    </div>`;
+  });
+  html += `<div class="rowadd"><button class="btn ghost small" data-action="addAcctRow">+ Add partner row</button></div>`;
+  html += '</div>';
+  html += sectionClose();
+
+  html += sectionOpen('Daily Checklist', r.checklist.length+'');
+  html += '<div class="card" id="checklistTable">';
+  r.checklist.forEach((c,i)=>{
+    html += `<div class="rowline" data-idx="${i}">
+      <div class="grow" style="font-size:12.8px;">${escapeHtml(c.label)}</div>
+      <select class="chkStatus">
+        <option value="DONE" ${c.status==='DONE'?'selected':''}>DONE</option>
+        <option value="PENDING" ${c.status==='PENDING'?'selected':''}>PENDING</option>
+      </select>
+    </div>`;
+  });
+  html += `<div class="formfield"><label>UNMARKED JOBS ON TALIXO</label><input type="text" id="rf_talixoUnmarked" value="${escapeAttr(r.talixoUnmarked)}"></div>`;
+  html += `<div class="formfield"><label>LAST-MINUTE CANCELLATIONS / NO-SHOWS</label><input type="text" id="rf_lastMinute" value="${escapeAttr(r.lastMinuteCancellations)}"></div>`;
+  html += '</div>';
+  html += sectionClose();
+
+  html += sectionOpen('Issues & Flags','');
+  html += `<div class="card">
+    <div class="formfield"><label>FLIGHT ISSUES</label><input type="text" id="rf_flight" value="${escapeAttr(r.issues.flight)}" placeholder="e.g. 1 job missing flight number"></div>
+    <div class="formfield"><label>POSTCODE ISSUES</label><input type="text" id="rf_postcode" value="${escapeAttr(r.issues.postcode)}"></div>
+    <div class="formfield"><label>CONTACT ISSUES</label><input type="text" id="rf_contact" value="${escapeAttr(r.issues.contact)}"></div>
+    <div class="formfield"><label>CHILD SEAT</label><input type="text" id="rf_childseat" value="${escapeAttr(r.issues.childseat)}"></div>
+  </div>`;
+  html += sectionClose();
+
+  html += sectionOpen('Vehicles Overview — Tomorrow','');
+  html += `<div class="card"><div class="vehgrid">
+    ${['saloon','mpv','minivan','estate','minibus','executive'].map(k=>`
+      <div><label>${k.toUpperCase()}</label><input type="number" id="rf_veh_${k}" value="${r.vehicles[k]}" min="0"></div>
+    `).join('')}
+  </div></div>`;
+  html += sectionClose();
+
+  html += sectionOpen('Job Added / Assigning', r.jobAdded.length+'');
+  html += '<div class="card" id="jobAddedTable">';
+  if(r.jobAdded.length===0){
+    html += '<div class="empty">No rows yet — auto-fills from your Tomorrow job log, or add manually.</div>';
+  } else {
+    r.jobAdded.forEach((j,i)=>{
+      html += `<div class="rowline" data-idx="${i}">
+        <span class="rlbl">#${j.num}</span>
+        <input type="text" class="grow jaPartner" value="${escapeAttr(j.partner)}" placeholder="Partner">
+        <select class="jaStatus">
+          <option value="ADDED" ${j.status==='ADDED'?'selected':''}>ADDED</option>
+          <option value="ASSIGNED" ${j.status==='ASSIGNED'?'selected':''}>ASSIGNED</option>
+        </select>
+        <button class="rmv" data-action="rmJobRow">✕</button>
+      </div>`;
+    });
+  }
+  html += `<div class="rowadd"><button class="btn ghost small" data-action="addJobRow">+ Add row</button></div>`;
+  html += '</div>';
+  html += sectionClose();
+
+  html += sectionOpen('Incidents & Notes', r.incidents.length+'');
+  html += '<div class="card" id="incTable">';
+  if(r.incidents.length===0){
+    html += '<div class="empty">No incidents logged — auto-fills from today\'s calls & no-shows, or add manually.</div>';
+  } else {
+    r.incidents.forEach((inc,i)=>{
+      html += `<div class="rowline" data-idx="${i}" style="flex-direction:column; align-items:stretch; gap:6px;">
+        <div style="display:flex; gap:8px;">
+          <input type="text" class="incType" value="${escapeAttr(inc.type)}" placeholder="Type" style="width:130px;">
+          <button class="rmv" data-action="rmIncRow" style="margin-left:auto;">✕</button>
+        </div>
+        <textarea class="incDetails" rows="2" style="width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px; font-family:inherit; font-size:12.8px;">${escapeHtml(inc.details)}</textarea>
+      </div>`;
+    });
+  }
+  html += `<div class="rowadd"><button class="btn ghost small" data-action="addIncRow">+ Add row</button></div>`;
+  html += '</div>';
+  html += sectionClose();
+
+  html += `<div class="toolbar">
+    <button class="btn ghost" data-action="saveReportDraft">💾 Save draft</button>
+    <button class="btn ghost" data-action="refreshReportDraft">🔄 Refresh auto-fields</button>
+    <button class="btn amberbtn" data-action="generateReportPDF">📄 Generate PDF</button>
+  </div>`;
+
+  document.getElementById('main').innerHTML = html;
+
+  attachAutocomplete(document.getElementById('rf_flight'), 'flight');
+  attachAutocomplete(document.getElementById('rf_postcode'), 'postcode');
+  attachAutocomplete(document.getElementById('rf_contact'), 'contact');
+  attachAutocomplete(document.getElementById('rf_childseat'), 'childseat');
+  document.querySelectorAll('#incTable .incType').forEach(e=>attachAutocomplete(e,'incType'));
+  document.querySelectorAll('#incTable .incDetails').forEach(e=>attachAutocomplete(e,'incDetails'));
+}
+
+function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+function collectReportFromDOM(){
+  const r = window.__reportDraft;
+  r.date = document.getElementById('rf_date').value;
+  r.operator = document.getElementById('rf_operator').value;
+  r.shift = document.getElementById('rf_shift').value;
+
+  r.accounts = Array.from(document.querySelectorAll('#acctTable .rowline')).map(row=>({
+    name: row.querySelector('.acctName').value,
+    jobs: parseInt(row.querySelector('.acctJobs').value||'0',10)
+  }));
+
+  const statusSelects = document.querySelectorAll('#checklistTable .chkStatus');
+  r.checklist.forEach((c,i)=>{ c.status = statusSelects[i].value; });
+  r.talixoUnmarked = document.getElementById('rf_talixoUnmarked').value;
+  r.lastMinuteCancellations = document.getElementById('rf_lastMinute').value;
+
+  r.issues = {
+    flight: document.getElementById('rf_flight').value,
+    postcode: document.getElementById('rf_postcode').value,
+    contact: document.getElementById('rf_contact').value,
+    childseat: document.getElementById('rf_childseat').value
+  };
+  r.vehicles = {
+    saloon: parseInt(document.getElementById('rf_veh_saloon').value||'0',10),
+    mpv: parseInt(document.getElementById('rf_veh_mpv').value||'0',10),
+    minivan: parseInt(document.getElementById('rf_veh_minivan').value||'0',10),
+    estate: parseInt(document.getElementById('rf_veh_estate').value||'0',10),
+    minibus: parseInt(document.getElementById('rf_veh_minibus').value||'0',10),
+    executive: parseInt(document.getElementById('rf_veh_executive').value||'0',10)
+  };
+
+  r.jobAdded = Array.from(document.querySelectorAll('#jobAddedTable .rowline')).map((row,i)=>({
+    num: i+1,
+    partner: row.querySelector('.jaPartner').value,
+    status: row.querySelector('.jaStatus').value
+  }));
+
+  r.incidents = Array.from(document.querySelectorAll('#incTable .rowline')).map(row=>({
+    type: row.querySelector('.incType').value,
+    details: row.querySelector('.incDetails').value
+  }));
+
+  return r;
+}
+
+async function generateReportPDF(){
+  const r = collectReportFromDOM();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'a4'});
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 40;
+  let y = 46;
+
+  const amber = [232,163,61];
+  const dark = [17,23,31];
+  const teal = [56,150,163];
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(20,20,20);
+  doc.text('GETCAB', margin, y); y+=18;
+  doc.setFontSize(11); doc.setTextColor(90,90,90);
+  doc.text('DAILY OPERATIONS REPORT', margin, y); y+=16;
+  doc.setDrawColor(210,210,210); doc.line(margin, y, pageW-margin, y); y+=16;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(40,40,40);
+  doc.text(`Date: ${r.date}    |    Operator: ${r.operator}    |    Shift: ${r.shift}`, margin, y);
+  y += 18;
+
+  function sectionBar(title){
+    doc.setFillColor(...dark);
+    doc.rect(margin, y, pageW-margin*2, 20, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
+    doc.text(title, margin+8, y+14);
+    y += 20;
+  }
+
+  // Accounts & Jobs Count — two-column layout like the reference sheet
+  sectionBar('ACCOUNTS & JOBS COUNT');
+  const half = Math.ceil(r.accounts.length/2);
+  const left = r.accounts.slice(0, half);
+  const right = r.accounts.slice(half);
+  const acctRows = [];
+  for(let i=0;i<Math.max(left.length,right.length);i++){
+    acctRows.push([
+      left[i]?left[i].name:'', left[i]?String(left[i].jobs):'',
+      right[i]?right[i].name:'', right[i]?String(right[i].jobs):''
+    ]);
+  }
+  const total = r.accounts.reduce((s,a)=>s+(a.jobs||0),0);
+  doc.autoTable({
+    startY:y, margin:{left:margin,right:margin},
+    head:[['PARTNER / ACCOUNT','JOBS','PARTNER / ACCOUNT','JOBS']],
+    body:acctRows,
+    theme:'grid',
+    styles:{fontSize:8.5, cellPadding:4, textColor:[30,30,30]},
+    headStyles:{fillColor:[235,235,235], textColor:[20,20,20], fontStyle:'bold'},
+    columnStyles:{1:{cellWidth:40, halign:'center'}, 3:{cellWidth:40, halign:'center'}},
+    foot:[['TOTAL JOBS TODAY', String(total), '', '']],
+    footStyles:{fillColor:[...amber], textColor:[30,20,5], fontStyle:'bold'},
+  });
+  y = doc.lastAutoTable.finalY + 14;
+
+  // Daily Checklist
+  checkPageBreak(70);
+  sectionBar('DAILY CHECKLIST');
+  doc.autoTable({
+    startY:y, margin:{left:margin,right:margin},
+    head:[['CHECK ITEM','STATUS']],
+    body:[
+      ...r.checklist.map(c=>[c.label, c.status]),
+      ['Unmarked jobs on Talixo', r.talixoUnmarked||'-'],
+      ['Last-minute cancellations / No Shows', r.lastMinuteCancellations||'0']
+    ],
+    theme:'grid',
+    styles:{fontSize:8.5, cellPadding:4},
+    headStyles:{fillColor:[235,235,235], textColor:[20,20,20], fontStyle:'bold'},
+    columnStyles:{1:{cellWidth:80, halign:'center'}},
+  });
+  y = doc.lastAutoTable.finalY + 14;
+
+  // Issues & Flags
+  checkPageBreak(90);
+  sectionBar('ISSUES & FLAGS');
+  doc.autoTable({
+    startY:y, margin:{left:margin,right:margin},
+    body:[
+      ['Flight Issues', r.issues.flight||'-'],
+      ['Postcode Issues', r.issues.postcode||'-'],
+      ['Contact Issues', r.issues.contact||'-'],
+      ['Child Seat', r.issues.childseat||'-'],
+    ],
+    theme:'grid',
+    styles:{fontSize:8.5, cellPadding:4},
+    columnStyles:{0:{cellWidth:130, fontStyle:'bold', fillColor:[248,248,248]}},
+  });
+  y = doc.lastAutoTable.finalY + 14;
+
+  // Vehicles Overview
+  checkPageBreak(60);
+  sectionBar('VEHICLES OVERVIEW (TOMORROW)');
+  doc.autoTable({
+    startY:y, margin:{left:margin,right:margin},
+    head:[['SALOON','MPV','MINIVAN','ESTATE','MINIBUS','EXECUTIVE']],
+    body:[[r.vehicles.saloon, r.vehicles.mpv, r.vehicles.minivan, r.vehicles.estate, r.vehicles.minibus, r.vehicles.executive]],
+    theme:'grid',
+    styles:{fontSize:9, cellPadding:5, halign:'center'},
+    headStyles:{fillColor:[235,235,235], textColor:[20,20,20], fontStyle:'bold'},
+  });
+  y = doc.lastAutoTable.finalY + 14;
+
+  // Job Added / Assigning
+  checkPageBreak(80);
+  sectionBar('JOB ADDED / ASSIGNING');
+  doc.autoTable({
+    startY:y, margin:{left:margin,right:margin},
+    head:[['NUM','PARTNER','STATUS']],
+    body: r.jobAdded.length ? r.jobAdded.map(j=>[j.num, j.partner, j.status]) : [['-','-','-']],
+    theme:'grid',
+    styles:{fontSize:8.5, cellPadding:4},
+    headStyles:{fillColor:[235,235,235], textColor:[20,20,20], fontStyle:'bold'},
+  });
+  y = doc.lastAutoTable.finalY + 14;
+
+  // Incidents & Notes
+  checkPageBreak(80);
+  sectionBar('INCIDENTS & NOTES');
+  doc.autoTable({
+    startY:y, margin:{left:margin,right:margin},
+    head:[['TYPE','DETAILS']],
+    body: r.incidents.length ? r.incidents.map(i=>[i.type, i.details]) : [['-','-']],
+    theme:'grid',
+    styles:{fontSize:8.5, cellPadding:4},
+    headStyles:{fillColor:[235,235,235], textColor:[20,20,20], fontStyle:'bold'},
+    columnStyles:{0:{cellWidth:90, fontStyle:'bold'}},
+  });
+  y = doc.lastAutoTable.finalY + 20;
+
+  function checkPageBreak(need){
+    if(y+need > doc.internal.pageSize.getHeight()-50){ doc.addPage(); y=46; }
+  }
+
+  // Footer on every page
+  const pageCount = doc.internal.getNumberOfPages();
+  for(let p=1;p<=pageCount;p++){
+    doc.setPage(p);
+    const h = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(220,220,220); doc.line(margin, h-38, pageW-margin, h-38);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(120,120,120);
+    doc.text('GETCAB | Bartle House, 9 Oxford Court, Manchester M2 2WQ | +44 161 669 0888 | info@getcab.uk', margin, h-26);
+  }
+
+  await storageSet('reportDraft:'+todayKey, JSON.stringify(r));
+  doc.save(buildReportFilename(r));
+}
+
+function buildReportFilename(r){
+  // Turns a date into "Qasim_Report_20th_Sep.pdf" style, matching Qasim's own report naming.
+  let d = null;
+  const m = (r.date||'').match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if(m){
+    let [_, dd, mm, yy] = m;
+    yy = yy.length===2 ? '20'+yy : yy;
+    d = new Date(parseInt(yy,10), parseInt(mm,10)-1, parseInt(dd,10));
+  }
+  if(!d || isNaN(d.getTime())) d = new Date();
+
+  const day = d.getDate();
+  const suffix = (day%10===1 && day!==11) ? 'st' : (day%10===2 && day!==12) ? 'nd' : (day%10===3 && day!==13) ? 'rd' : 'th';
+  const month = d.toLocaleDateString('en-GB', {month:'short'});
+  const operatorName = (r.operator||'Qasim').trim().split(/\s+/)[0] || 'Qasim';
+  return `${operatorName}_Report_${day}${suffix}_${month}.pdf`;
+}
+
+/* ---------------- Section helpers ---------------- */
+function sectionOpen(title, count){
+  return `<div class="section"><div class="section-head"><h2>${title}</h2>${count!==''?`<span class="count">${count}</span>`:''}</div>`;
+}
+function sectionClose(){ return '</div>'; }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ---------------- Router ---------------- */
+async function render(){
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===activeTab));
+  if(activeTab==='today') await renderToday();
+  else if(activeTab==='tomorrow') await renderTomorrow();
+  else if(activeTab==='yesterday') await renderYesterday();
+  else if(activeTab==='notes') await renderNotes();
+  else if(activeTab==='mistakes') await renderMistakes();
+  else if(activeTab==='questions') await renderQuestions();
+  else if(activeTab==='followups') await renderFollowups();
+  else if(activeTab==='scripts') await renderScripts();
+  else if(activeTab==='report') await renderReport();
+  refreshTabBadges();
+}
+
+async function refreshTabBadges(){
+  const [mistakes, questions, followups] = await Promise.all([loadMistakes(), loadQuestions(), loadFollowups()]);
+  const openQ = questions.filter(q=>!q.done).length;
+  const now = new Date();
+  const dueF = followups.filter(f=>!f.done && f.dueAt && new Date(f.dueAt)<=now).length;
+  const openF = followups.filter(f=>!f.done).length;
+  setTabLabel('mistakes', '⚠️ Mistakes', mistakes.length, mistakes.length>0);
+  setTabLabel('questions', '❓ Questions', openQ, false);
+  setTabLabel('followups', '⏳ Follow-ups', dueF>0?dueF:openF, dueF>0);
+}
+function setTabLabel(tab, base, count, urgent){
+  const btn = document.querySelector(`#tabs button[data-tab="${tab}"]`);
+  if(!btn) return;
+  btn.textContent = count>0 ? `${base} (${count})` : base;
+  btn.style.color = urgent ? 'var(--red)' : '';
+}
+
+document.getElementById('tabs').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-tab]');
+  if(!b) return;
+  if(activeTab==='report' && window.__reportDraft && document.getElementById('rf_date')){
+    try{ collectReportFromDOM(); }catch(err){}
+  }
+  activeTab = b.dataset.tab;
+  render();
+});
+
+/* ---------------- Event delegation for main content ---------------- */
+document.getElementById('main').addEventListener('click', async (e)=>{
+  const el = e.target.closest('[data-action]');
+  if(!el) return;
+  const action = el.dataset.action;
+
+  if(action==='gotoTab'){
+    activeTab = el.dataset.tab; return render();
+  }
+
+  if(action==='toggleFixed'){
+    const day = await loadDay(todayKey);
+    const item = day.checklist.find(c=>c.id===el.dataset.id);
+    item.done = !item.done;
+    await saveDay(todayKey);
+    return render();
+  }
+
+  if(action==='toggleEmail'){
+    const day = await loadDay(todayKey);
+    const acc = el.dataset.acc, part = el.dataset.part;
+    day.emails[acc][part] = !day.emails[acc][part];
+    await saveDay(todayKey);
+    return render();
+  }
+
+  if(action==='toggleJT'){
+    const day = await loadDay(todayKey);
+    day.jobtracking[el.dataset.part] = !day.jobtracking[el.dataset.part];
+    await saveDay(todayKey);
+    return render();
+  }
+
+  if(action==='addCall'){
+    const input = document.getElementById('addCallInput');
+    if(!input.value.trim()) return;
+    const day = await loadDay(todayKey);
+    day.calls.push({id:uid(), name:input.value.trim(), done:false});
+    await saveDay(todayKey);
+    return render();
+  }
+  if(action==='toggleCall'){
+    const day = await loadDay(todayKey);
+    const call = day.calls.find(c=>c.id===el.dataset.id);
+    call.done = !call.done;
+    await saveDay(todayKey);
+    await render();
+    if(call.done){
+      const allDone = day.calls.every(c=>c.done);
+      if(allDone && day.calls.length>0){
+        setTimeout(()=>askImportantNote(), 150);
+      }
+    }
+    return;
+  }
+  if(action==='delCall'){
+    const day = await loadDay(todayKey);
+    day.calls = day.calls.filter(c=>c.id!==el.dataset.id);
+    await saveDay(todayKey);
+    return render();
+  }
+
+  if(action==='addNoShow'){
+    const input = document.getElementById('addNoShowInput');
+    if(!input.value.trim()) return;
+    const day = await loadDay(todayKey);
+    day.noshows.push({id:uid(), ref:input.value.trim(), proof:false});
+    await saveDay(todayKey);
+    return render();
+  }
+  if(action==='toggleNoShowProof'){
+    const day = await loadDay(todayKey);
+    const ns = day.noshows.find(n=>n.id===el.dataset.id);
+    ns.proof = !ns.proof;
+    await saveDay(todayKey);
+    return render();
+  }
+  if(action==='delNoShow'){
+    const day = await loadDay(todayKey);
+    day.noshows = day.noshows.filter(n=>n.id!==el.dataset.id);
+    await saveDay(todayKey);
+    return render();
+  }
+
+  if(action==='addCustomToday'){
+    const input = document.getElementById('addTodayInput');
+    if(!input.value.trim()) return;
+    const day = await loadDay(todayKey);
+    day.customTasks.push({id:uid(), text:input.value.trim(), done:false});
+    await saveDay(todayKey);
+    return render();
+  }
+  if(action==='toggleCustom'){
+    const key = el.dataset.scope==='today'?todayKey:tomorrowKey;
+    const day = await loadDay(key);
+    const c = day.customTasks.find(c=>c.id===el.dataset.id);
+    c.done = !c.done;
+    await saveDay(key);
+    return render();
+  }
+  if(action==='delCustom'){
+    const key = el.dataset.scope==='today'?todayKey:tomorrowKey;
+    const day = await loadDay(key);
+    day.customTasks = day.customTasks.filter(c=>c.id!==el.dataset.id);
+    await saveDay(key);
+    return render();
+  }
+
+  if(action==='pickSource'){
+    window.__pickedSource = el.dataset.source;
+    highlightSource();
+    return;
+  }
+  if(action==='addTomorrowLog'){
+    const today = await loadDay(todayKey);
+    if(!isTodayFullyDone(today)) return;
+    const input = document.getElementById('addTomorrowInput');
+    if(!input.value.trim()) return;
+    const day = await loadDay(tomorrowKey);
+    day.tomorrowLog.push({id:uid(), text:input.value.trim(), source: window.__pickedSource||'gmail', done:false});
+    await saveDay(tomorrowKey);
+    return render();
+  }
+  if(action==='toggleTomorrowLog'){
+    const day = await loadDay(tomorrowKey);
+    const l = day.tomorrowLog.find(x=>x.id===el.dataset.id);
+    l.done = !l.done;
+    await saveDay(tomorrowKey);
+    return render();
+  }
+  if(action==='delTomorrowLog'){
+    const day = await loadDay(tomorrowKey);
+    day.tomorrowLog = day.tomorrowLog.filter(x=>x.id!==el.dataset.id);
+    await saveDay(tomorrowKey);
+    return render();
+  }
+  if(action==='toggleTomorrowReview'){
+    const today = await loadDay(todayKey);
+    if(!isTodayFullyDone(today)) return;
+    const day = await loadDay(tomorrowKey);
+    day.jobtracking.reviewed = !day.jobtracking.reviewed;
+    await saveDay(tomorrowKey);
+    return render();
+  }
+
+  if(action==='addNote'){
+    const input = document.getElementById('addNoteInput');
+    if(!input.value.trim()) return;
+    const notes = await loadNotes();
+    notes.push({id:uid(), text:input.value.trim(), done:false, ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
+    await saveNotes(notes);
+    return render();
+  }
+  if(action==='toggleNote'){
+    const notes = await loadNotes();
+    const n = notes.find(x=>x.id===el.dataset.id);
+    n.done = !n.done;
+    await saveNotes(notes);
+    return render();
+  }
+  if(action==='delNote'){
+    let notes = await loadNotes();
+    notes = notes.filter(x=>x.id!==el.dataset.id);
+    await saveNotes(notes);
+    return render();
+  }
+  if(action==='openNotesWindow'){
+    return openNotesWindow();
+  }
+
+  if(action==='addMistake'){
+    const input = document.getElementById('addMistakeInput');
+    if(!input.value.trim()) return;
+    recordSuggestion('mistake', input.value);
+    const list = await loadMistakes();
+    list.push({id:uid(), text:input.value.trim(), ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
+    await saveMistakes(list);
+    return render();
+  }
+  if(action==='delMistake'){
+    let list = await loadMistakes();
+    list = list.filter(m=>m.id!==el.dataset.id);
+    await saveMistakes(list);
+    return render();
+  }
+
+  if(action==='addQuestion'){
+    const input = document.getElementById('addQuestionInput');
+    if(!input.value.trim()) return;
+    recordSuggestion('question', input.value);
+    const list = await loadQuestions();
+    list.push({id:uid(), text:input.value.trim(), done:false, ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
+    await saveQuestions(list);
+    return render();
+  }
+  if(action==='toggleQuestion'){
+    const list = await loadQuestions();
+    const q = list.find(x=>x.id===el.dataset.id);
+    q.done = !q.done;
+    await saveQuestions(list);
+    return render();
+  }
+  if(action==='delQuestion'){
+    let list = await loadQuestions();
+    list = list.filter(x=>x.id!==el.dataset.id);
+    await saveQuestions(list);
+    return render();
+  }
+
+  if(action==='addFollowup'){
+    const textInput = document.getElementById('addFollowupText');
+    const dueInput = document.getElementById('addFollowupDue');
+    const approvalChk = document.getElementById('addFollowupApproval');
+    if(!textInput.value.trim()) return;
+    recordSuggestion('followup', textInput.value);
+    const list = await loadFollowups();
+    list.push({
+      id:uid(), text:textInput.value.trim(),
+      dueAt: dueInput.value ? new Date(dueInput.value).toISOString() : '',
+      needsApproval: approvalChk.checked, done:false,
+      ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+    });
+    await saveFollowups(list);
+    return render();
+  }
+  if(action==='toggleFollowup'){
+    const list = await loadFollowups();
+    const f = list.find(x=>x.id===el.dataset.id);
+    f.done = !f.done;
+    await saveFollowups(list);
+    return render();
+  }
+  if(action==='delFollowup'){
+    let list = await loadFollowups();
+    list = list.filter(x=>x.id!==el.dataset.id);
+    await saveFollowups(list);
+    return render();
+  }
+
+  if(action==='addScript'){
+    const topicInput = document.getElementById('addScriptTopic');
+    const bodyInput = document.getElementById('addScriptBody');
+    if(!topicInput.value.trim() || !bodyInput.value.trim()) return;
+    recordSuggestion('scriptTopic', topicInput.value);
+    const list = await loadScripts();
+    list.push({id:uid(), topic:topicInput.value.trim(), body:bodyInput.value.trim(), ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
+    window.__scriptsCache = list;
+    await saveScripts(list);
+    return render();
+  }
+  if(action==='clearScriptSearch'){
+    window.__scriptsFilter = '';
+    const input = document.getElementById('scriptSearchInput');
+    if(input) input.value = '';
+    if(!refreshScriptResultsOnly()) render();
+    return;
+  }
+  if(action==='copyScript'){
+    const s = window.__scriptsCache.find(x=>x.id===el.dataset.id);
+    if(!s) return;
+    try{
+      await navigator.clipboard.writeText(s.body);
+      el.textContent = '✓ Copied';
+      setTimeout(()=>{ el.textContent = '📋 Copy'; }, 1200);
+    }catch(e){
+      alert(s.body); // fallback so the text is at least visible to copy manually
+    }
+    return;
+  }
+  if(action==='editScript'){
+    window.__editingScriptId = el.dataset.id;
+    if(!refreshScriptResultsOnly()) return renderScripts();
+    return;
+  }
+  if(action==='cancelEditScript'){
+    window.__editingScriptId = null;
+    if(!refreshScriptResultsOnly()) return renderScripts();
+    return;
+  }
+  if(action==='saveEditScript'){
+    const card = el.closest('.scriptcard');
+    const newTopic = card.querySelector('.editTopic').value.trim();
+    const newBody = card.querySelector('.editBody').value.trim();
+    if(!newTopic || !newBody) return;
+    const list = await loadScripts();
+    const s = list.find(x=>x.id===el.dataset.id);
+    if(s){ s.topic = newTopic; s.body = newBody; }
+    window.__scriptsCache = list;
+    window.__editingScriptId = null;
+    await saveScripts(list);
+    if(!refreshScriptResultsOnly()) return renderScripts();
+    return;
+  }
+  if(action==='delScript'){
+    if(!confirm('Delete this saved script?')) return;
+    let list = await loadScripts();
+    list = list.filter(x=>x.id!==el.dataset.id);
+    window.__scriptsCache = list;
+    await saveScripts(list);
+    if(!refreshScriptResultsOnly()) return renderScripts();
+    return;
+  }
+
+  if(action==='addAcctRow'){
+    document.getElementById('acctTable').insertAdjacentHTML('beforeend',
+      `<div class="rowline"><div class="acct2"><input type="text" class="grow acctName" placeholder="Partner name"><input type="number" class="acctJobs" value="0" min="0"></div><button class="rmv" data-action="rmAcctRow">✕</button></div>`);
+    return;
+  }
+  if(action==='rmAcctRow'){ el.closest('.rowline').remove(); return; }
+
+  if(action==='addJobRow'){
+    const table = document.getElementById('jobAddedTable');
+    const empty = table.querySelector('.empty'); if(empty) empty.remove();
+    const addBtnRow = table.querySelector('.rowadd');
+    const n = table.querySelectorAll('.rowline').length + 1;
+    addBtnRow.insertAdjacentHTML('beforebegin',
+      `<div class="rowline"><span class="rlbl">#${n}</span><input type="text" class="grow jaPartner" placeholder="Partner"><select class="jaStatus"><option value="ADDED">ADDED</option><option value="ASSIGNED">ASSIGNED</option></select><button class="rmv" data-action="rmJobRow">✕</button></div>`);
+    return;
+  }
+  if(action==='rmJobRow'){ el.closest('.rowline').remove(); return; }
+
+  if(action==='addIncRow'){
+    const table = document.getElementById('incTable');
+    const empty = table.querySelector('.empty'); if(empty) empty.remove();
+    const addBtnRow = table.querySelector('.rowadd');
+    addBtnRow.insertAdjacentHTML('beforebegin',
+      `<div class="rowline" style="flex-direction:column; align-items:stretch; gap:6px;">
+        <div style="display:flex; gap:8px;">
+          <input type="text" class="incType" placeholder="Type" style="width:130px;">
+          <button class="rmv" data-action="rmIncRow" style="margin-left:auto;">✕</button>
+        </div>
+        <textarea class="incDetails" rows="2" style="width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px; font-family:inherit; font-size:12.8px;" placeholder="Details"></textarea>
+      </div>`);
+    const newRow = addBtnRow.previousElementSibling;
+    attachAutocomplete(newRow.querySelector('.incType'), 'incType');
+    attachAutocomplete(newRow.querySelector('.incDetails'), 'incDetails');
+    return;
+  }
+  if(action==='rmIncRow'){ el.closest('.rowline').remove(); return; }
+
+  if(action==='saveReportDraft'){
+    const r = collectReportFromDOM();
+    await storageSet('reportDraft:'+todayKey, JSON.stringify(r));
+    el.textContent = '✓ Saved';
+    setTimeout(()=>{ el.textContent = '💾 Save draft'; }, 1200);
+    return;
+  }
+  if(action==='refreshReportDraft'){
+    const fresh = await buildAutoReport();
+    // keep header fields the user may have customised, refresh the rest
+    fresh.date = window.__reportDraft.date;
+    fresh.operator = window.__reportDraft.operator;
+    fresh.shift = window.__reportDraft.shift;
+    window.__reportDraft = fresh;
+    return renderReport();
+  }
+  if(action==='generateReportPDF'){
+    el.disabled = true; el.textContent = 'Generating…';
+    try{ await generateReportPDF(); }
+    catch(err){ alert('Could not generate PDF: '+err.message); }
+    el.disabled = false; el.textContent = '📄 Generate PDF';
+    return;
+  }
+
+  if(action==='clearNotesDone'){
+    let notes = await loadNotes();
+    notes = notes.filter(x=>!x.done);
+    await saveNotes(notes);
+    return render();
+  }
+});
+
+/* Live filter for the scripts search box — updates only the results list,
+   never touches the input itself, so the mobile keyboard never flickers. */
+document.getElementById('main').addEventListener('input', (e)=>{
+  if(e.target.id === 'scriptSearchInput'){
+    window.__scriptsFilter = e.target.value;
+    refreshScriptResultsOnly();
+  }
+});
+
+/* Enter-to-submit on text inputs */
+document.getElementById('main').addEventListener('keydown', (e)=>{
+  if(e.key==='Enter' && e.target.tagName==='INPUT'){
+    const map = {
+      addTodayInput:'addCustomToday', addCallInput:'addCall', addNoShowInput:'addNoShow',
+      addTomorrowInput:'addTomorrowLog', addNoteInput:'addNote',
+      addMistakeInput:'addMistake', addQuestionInput:'addQuestion', addFollowupText:'addFollowup'
+    };
+    const action = map[e.target.id];
+    if(action){
+      const btn = document.querySelector(`[data-action="${action}"]`);
+      if(btn) btn.click();
+    }
+  }
+});
+
+function askImportantNote(){
+  const yes = confirm('All customers on today\'s call list are marked done.\n\nAny important thing to tell the team about these jobs?');
+  if(yes){
+    const txt = prompt('Type the note for the manager:');
+    if(txt && txt.trim()){
+      loadNotes().then(notes=>{
+        notes.push({id:uid(), text:txt.trim(), done:false, ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
+        return saveNotes(notes);
+      });
+    }
+  }
+}
+
+function updateSyncBadge(){
+  const el = document.getElementById('syncBadge');
+  if(!el) return;
+  if(FIREBASE_READY){
+    el.textContent = '☁️ Synced across devices';
+    el.style.color = 'var(--green)';
+  } else if(HAS_CLOUD_STORAGE){
+    el.textContent = '☁️ Synced via Claude.ai';
+    el.style.color = 'var(--green)';
+  } else {
+    el.textContent = '⚠️ This device only — Firebase not set up';
+    el.style.color = 'var(--amber)';
+  }
+}
+
+/* ---------------- Init ---------------- */
+loadSuggestionsOnce();
+tickClock();
+render();
+updateSyncBadge();
+setInterval(refreshTabBadges, 60000); // keep "due now" badges live even without navigation
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{ /* fine if it fails, app still works */ });
+  });
+}
+</script>
+</body>
+</html>
