@@ -292,7 +292,7 @@
     </div>
   </div>
   <div class="opline">
-    <span>Shift: <b>Evening / Night</b></span>
+    <span>Shift: <b>Day</b></span>
     <span>Status: <b id="statusLine">loading…</b></span>
     <span id="syncBadge">⚪ Checking sync…</span>
   </div>
@@ -482,6 +482,7 @@ async function saveDay(key){
 }
 
 async function loadNotes(){
+  if(window.__notesCache) return window.__notesCache;
   try{
     const res = await storageGet('managerNotes');
     const notes = (res && res.value) ? JSON.parse(res.value) : [];
@@ -489,29 +490,39 @@ async function loadNotes(){
     return notes;
   }catch(e){ return []; }
 }
-async function saveNotes(notes){
+function saveNotes(notes){
   window.__notesCache = notes;
-  try{ await storageSet('managerNotes', JSON.stringify(notes)); }catch(e){}
+  try{ storageSet('managerNotes', JSON.stringify(notes)); }catch(e){}
 }
 
-/* ---------------- Persistent lists: Mistakes / Questions / Follow-ups ---------------- */
+/* ---------------- Persistent lists: Mistakes / Questions / Follow-ups ----------------
+   Cached in memory once loaded, same pattern as loadDay(), so re-rendering the Today tab
+   (which checks these for its reminder banners) doesn't hit the network every single time. */
+let mistakesCache = null, questionsCache = null, followupsCache = null;
+
 async function loadMistakes(){
-  try{ const res = await storageGet('mistakesLog'); return res && res.value ? JSON.parse(res.value) : []; }
-  catch(e){ return []; }
+  if(mistakesCache) return mistakesCache;
+  try{ const res = await storageGet('mistakesLog'); mistakesCache = res && res.value ? JSON.parse(res.value) : []; }
+  catch(e){ mistakesCache = []; }
+  return mistakesCache;
 }
-async function saveMistakes(list){ try{ await storageSet('mistakesLog', JSON.stringify(list)); }catch(e){} }
+function saveMistakes(list){ mistakesCache = list; try{ storageSet('mistakesLog', JSON.stringify(list)); }catch(e){} }
 
 async function loadQuestions(){
-  try{ const res = await storageGet('questionsLog'); return res && res.value ? JSON.parse(res.value) : []; }
-  catch(e){ return []; }
+  if(questionsCache) return questionsCache;
+  try{ const res = await storageGet('questionsLog'); questionsCache = res && res.value ? JSON.parse(res.value) : []; }
+  catch(e){ questionsCache = []; }
+  return questionsCache;
 }
-async function saveQuestions(list){ try{ await storageSet('questionsLog', JSON.stringify(list)); }catch(e){} }
+function saveQuestions(list){ questionsCache = list; try{ storageSet('questionsLog', JSON.stringify(list)); }catch(e){} }
 
 async function loadFollowups(){
-  try{ const res = await storageGet('followupsLog'); return res && res.value ? JSON.parse(res.value) : []; }
-  catch(e){ return []; }
+  if(followupsCache) return followupsCache;
+  try{ const res = await storageGet('followupsLog'); followupsCache = res && res.value ? JSON.parse(res.value) : []; }
+  catch(e){ followupsCache = []; }
+  return followupsCache;
 }
-async function saveFollowups(list){ try{ await storageSet('followupsLog', JSON.stringify(list)); }catch(e){} }
+function saveFollowups(list){ followupsCache = list; try{ storageSet('followupsLog', JSON.stringify(list)); }catch(e){} }
 
 /* ---------------- Scripts library ---------------- */
 async function loadScripts(){
@@ -954,7 +965,7 @@ window.__addNoteSync = async function(text){
   const notes = await loadNotes();
   notes.push({id:uid(), text, done:false, ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
   window.__notesCache = notes;
-  await saveNotes(notes);
+  saveNotes(notes);
   if(activeTab==='notes') render();
 };
 window.__updateNoteSync = async function(id, text, done){
@@ -962,14 +973,14 @@ window.__updateNoteSync = async function(id, text, done){
   const n = notes.find(x=>x.id===id);
   if(n){ n.text = text; n.done = done; }
   window.__notesCache = notes;
-  await saveNotes(notes);
+  saveNotes(notes);
   if(activeTab==='notes') render();
 };
 window.__deleteNoteSync = async function(id){
   let notes = await loadNotes();
   notes = notes.filter(x=>x.id!==id);
   window.__notesCache = notes;
-  await saveNotes(notes);
+  saveNotes(notes);
   if(activeTab==='notes') render();
 };
 
@@ -1212,7 +1223,7 @@ async function buildAutoReport(){
   return {
     date: new Date().toLocaleDateString('en-GB'),
     operator: 'Qasim',
-    shift: 'Evening / Night',
+    shift: 'Day',
     accounts: DEFAULT_PARTNERS.map(p=>({name:p, jobs:0})),
     checklist: checklistRows,
     talixoUnmarked: '',
@@ -1605,7 +1616,25 @@ document.getElementById('tabs').addEventListener('click', e=>{
     try{ collectReportFromDOM(); }catch(err){}
   }
   activeTab = b.dataset.tab;
+  render(); // instant — always uses whatever's already in memory, never waits on the network
+});
+
+// Cross-device freshness happens here instead: a quiet background refresh, not tied to
+// clicking, so it can never block a tap or race against a save that's still in flight.
+// Runs periodically, and immediately whenever you come back to the app (switch back from
+// another app, wake your laptop, etc.) — the Report tab is skipped so it never overwrites
+// text you're mid-way through editing there.
+async function backgroundRefresh(){
+  if(!FIREBASE_READY) return;
+  if(activeTab === 'report') return;
+  delete state[todayKey]; delete state[tomorrowKey]; delete state[yesterdayKey];
+  mistakesCache = null; questionsCache = null; followupsCache = null;
+  window.__notesCache = null; window.__scriptsCache = null;
   render();
+}
+setInterval(backgroundRefresh, 30000);
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible') backgroundRefresh();
 });
 
 /* ---------------- Event delegation for main content ---------------- */
@@ -1622,7 +1651,7 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     const day = await loadDay(todayKey);
     const item = day.checklist.find(c=>c.id===el.dataset.id);
     item.done = !item.done;
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
 
@@ -1630,14 +1659,14 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     const day = await loadDay(todayKey);
     const acc = el.dataset.acc, part = el.dataset.part;
     day.emails[acc][part] = !day.emails[acc][part];
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
 
   if(action==='toggleJT'){
     const day = await loadDay(todayKey);
     day.jobtracking[el.dataset.part] = !day.jobtracking[el.dataset.part];
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
 
@@ -1646,14 +1675,14 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     if(!input.value.trim()) return;
     const day = await loadDay(todayKey);
     day.calls.push({id:uid(), name:input.value.trim(), done:false});
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
   if(action==='toggleCall'){
     const day = await loadDay(todayKey);
     const call = day.calls.find(c=>c.id===el.dataset.id);
     call.done = !call.done;
-    await saveDay(todayKey);
+    saveDay(todayKey);
     await render();
     if(call.done){
       const allDone = day.calls.every(c=>c.done);
@@ -1666,7 +1695,7 @@ document.getElementById('main').addEventListener('click', async (e)=>{
   if(action==='delCall'){
     const day = await loadDay(todayKey);
     day.calls = day.calls.filter(c=>c.id!==el.dataset.id);
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
 
@@ -1675,20 +1704,20 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     if(!input.value.trim()) return;
     const day = await loadDay(todayKey);
     day.noshows.push({id:uid(), ref:input.value.trim(), proof:false});
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
   if(action==='toggleNoShowProof'){
     const day = await loadDay(todayKey);
     const ns = day.noshows.find(n=>n.id===el.dataset.id);
     ns.proof = !ns.proof;
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
   if(action==='delNoShow'){
     const day = await loadDay(todayKey);
     day.noshows = day.noshows.filter(n=>n.id!==el.dataset.id);
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
 
@@ -1697,7 +1726,7 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     if(!input.value.trim()) return;
     const day = await loadDay(todayKey);
     day.customTasks.push({id:uid(), text:input.value.trim(), done:false});
-    await saveDay(todayKey);
+    saveDay(todayKey);
     return render();
   }
   if(action==='toggleCustom'){
@@ -1705,14 +1734,14 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     const day = await loadDay(key);
     const c = day.customTasks.find(c=>c.id===el.dataset.id);
     c.done = !c.done;
-    await saveDay(key);
+    saveDay(key);
     return render();
   }
   if(action==='delCustom'){
     const key = el.dataset.scope==='today'?todayKey:tomorrowKey;
     const day = await loadDay(key);
     day.customTasks = day.customTasks.filter(c=>c.id!==el.dataset.id);
-    await saveDay(key);
+    saveDay(key);
     return render();
   }
 
@@ -1728,20 +1757,20 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     if(!input.value.trim()) return;
     const day = await loadDay(tomorrowKey);
     day.tomorrowLog.push({id:uid(), text:input.value.trim(), source: window.__pickedSource||'gmail', done:false});
-    await saveDay(tomorrowKey);
+    saveDay(tomorrowKey);
     return render();
   }
   if(action==='toggleTomorrowLog'){
     const day = await loadDay(tomorrowKey);
     const l = day.tomorrowLog.find(x=>x.id===el.dataset.id);
     l.done = !l.done;
-    await saveDay(tomorrowKey);
+    saveDay(tomorrowKey);
     return render();
   }
   if(action==='delTomorrowLog'){
     const day = await loadDay(tomorrowKey);
     day.tomorrowLog = day.tomorrowLog.filter(x=>x.id!==el.dataset.id);
-    await saveDay(tomorrowKey);
+    saveDay(tomorrowKey);
     return render();
   }
   if(action==='toggleTomorrowReview'){
@@ -1749,7 +1778,7 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     if(!isTodayFullyDone(today)) return;
     const day = await loadDay(tomorrowKey);
     day.jobtracking.reviewed = !day.jobtracking.reviewed;
-    await saveDay(tomorrowKey);
+    saveDay(tomorrowKey);
     return render();
   }
 
@@ -1758,20 +1787,20 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     if(!input.value.trim()) return;
     const notes = await loadNotes();
     notes.push({id:uid(), text:input.value.trim(), done:false, ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
-    await saveNotes(notes);
+    saveNotes(notes);
     return render();
   }
   if(action==='toggleNote'){
     const notes = await loadNotes();
     const n = notes.find(x=>x.id===el.dataset.id);
     n.done = !n.done;
-    await saveNotes(notes);
+    saveNotes(notes);
     return render();
   }
   if(action==='delNote'){
     let notes = await loadNotes();
     notes = notes.filter(x=>x.id!==el.dataset.id);
-    await saveNotes(notes);
+    saveNotes(notes);
     return render();
   }
   if(action==='openNotesWindow'){
@@ -1784,13 +1813,13 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     recordSuggestion('mistake', input.value);
     const list = await loadMistakes();
     list.push({id:uid(), text:input.value.trim(), ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
-    await saveMistakes(list);
+    saveMistakes(list);
     return render();
   }
   if(action==='delMistake'){
     let list = await loadMistakes();
     list = list.filter(m=>m.id!==el.dataset.id);
-    await saveMistakes(list);
+    saveMistakes(list);
     return render();
   }
 
@@ -1800,20 +1829,20 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     recordSuggestion('question', input.value);
     const list = await loadQuestions();
     list.push({id:uid(), text:input.value.trim(), done:false, ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
-    await saveQuestions(list);
+    saveQuestions(list);
     return render();
   }
   if(action==='toggleQuestion'){
     const list = await loadQuestions();
     const q = list.find(x=>x.id===el.dataset.id);
     q.done = !q.done;
-    await saveQuestions(list);
+    saveQuestions(list);
     return render();
   }
   if(action==='delQuestion'){
     let list = await loadQuestions();
     list = list.filter(x=>x.id!==el.dataset.id);
-    await saveQuestions(list);
+    saveQuestions(list);
     return render();
   }
 
@@ -1830,20 +1859,20 @@ document.getElementById('main').addEventListener('click', async (e)=>{
       needsApproval: approvalChk.checked, done:false,
       ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
     });
-    await saveFollowups(list);
+    saveFollowups(list);
     return render();
   }
   if(action==='toggleFollowup'){
     const list = await loadFollowups();
     const f = list.find(x=>x.id===el.dataset.id);
     f.done = !f.done;
-    await saveFollowups(list);
+    saveFollowups(list);
     return render();
   }
   if(action==='delFollowup'){
     let list = await loadFollowups();
     list = list.filter(x=>x.id!==el.dataset.id);
-    await saveFollowups(list);
+    saveFollowups(list);
     return render();
   }
 
@@ -1855,7 +1884,7 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     const list = await loadScripts();
     list.push({id:uid(), topic:topicInput.value.trim(), body:bodyInput.value.trim(), ts:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})});
     window.__scriptsCache = list;
-    await saveScripts(list);
+    saveScripts(list);
     return render();
   }
   if(action==='clearScriptSearch'){
@@ -1897,7 +1926,7 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     if(s){ s.topic = newTopic; s.body = newBody; }
     window.__scriptsCache = list;
     window.__editingScriptId = null;
-    await saveScripts(list);
+    saveScripts(list);
     if(!refreshScriptResultsOnly()) return renderScripts();
     return;
   }
@@ -1906,7 +1935,7 @@ document.getElementById('main').addEventListener('click', async (e)=>{
     let list = await loadScripts();
     list = list.filter(x=>x.id!==el.dataset.id);
     window.__scriptsCache = list;
-    await saveScripts(list);
+    saveScripts(list);
     if(!refreshScriptResultsOnly()) return renderScripts();
     return;
   }
@@ -1975,7 +2004,7 @@ document.getElementById('main').addEventListener('click', async (e)=>{
   if(action==='clearNotesDone'){
     let notes = await loadNotes();
     notes = notes.filter(x=>!x.done);
-    await saveNotes(notes);
+    saveNotes(notes);
     return render();
   }
 });
