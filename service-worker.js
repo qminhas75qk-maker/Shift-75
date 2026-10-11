@@ -1,4 +1,4 @@
-const CACHE_NAME = 'getcab-console-v3';
+const CACHE_NAME = 'getcab-console-v7';
 const FILES_TO_CACHE = [
   './',
   './index.html',
