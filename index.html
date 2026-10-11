@@ -292,7 +292,7 @@
     </div>
   </div>
   <div class="opline">
-    <span>Shift: <b>Day</b></span>
+    <span>Shift: <b>Evening / Night</b></span>
     <span>Status: <b id="statusLine">loading…</b></span>
     <span id="syncBadge">⚪ Checking sync…</span>
   </div>
@@ -378,7 +378,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "952822599874",
   appId: "1:952822599874:web:38e80473aa87f1ef68ab5b"
 };
-const APP_KEY = "qasim-getcab"; // change this to any private word of your choosing
+const APP_KEY = "qasim-270c437ef23114f13147b58f"; // private — do not share this file/value with anyone else
 
 let firestoreDB = null;
 let FIREBASE_READY = false;
@@ -396,12 +396,21 @@ function firestoreDocRef(key){
   return firestoreDB.collection('consoles').doc(APP_KEY).collection('entries').doc(encodeURIComponent(key));
 }
 
+let pendingWrites = 0;
+let lastWriteError = null;
+
 async function storageGet(key){
   if(FIREBASE_READY){
     try{
       const snap = await firestoreDocRef(key).get();
-      return snap.exists ? { key, value: snap.data().value } : null;
-    }catch(e){ console.error('Firestore read failed', e); return null; }
+      if(snap.exists) return { key, value: snap.data().value };
+      return null;
+    }catch(e){
+      console.error('Firestore read failed', e);
+      lastWriteError = 'read: ' + (e.code || e.message);
+      try{ updateSyncBadge(); }catch(_){}
+      try{ const v = localStorage.getItem('getcab_'+key); return v!==null ? {key, value:v} : null; }catch(_){ return null; }
+    }
   }
   if(HAS_CLOUD_STORAGE){
     try{ return await window.storage.get(key, false); }
@@ -413,20 +422,28 @@ async function storageGet(key){
   }catch(e){ return null; }
 }
 async function storageSet(key, value){
+  // always keep a local backup copy first, so a failed cloud write never loses data
+  try{ localStorage.setItem('getcab_'+key, value); }catch(e){}
   if(FIREBASE_READY){
+    pendingWrites++;
     try{
       await firestoreDocRef(key).set({ value, updatedAt: Date.now() });
+      lastWriteError = null;
       return { key, value };
-    }catch(e){ console.error('Firestore write failed', e); return null; }
+    }catch(e){
+      console.error('Firestore write failed', e);
+      lastWriteError = 'write: ' + (e.code || e.message);
+      return null;
+    }finally{
+      pendingWrites--;
+      try{ updateSyncBadge(); }catch(_){}
+    }
   }
   if(HAS_CLOUD_STORAGE){
     try{ return await window.storage.set(key, value, false); }
     catch(e){ return null; }
   }
-  try{
-    localStorage.setItem('getcab_'+key, value);
-    return {key, value};
-  }catch(e){ return null; }
+  return {key, value};
 }
 
 function dateKey(d){
@@ -1223,7 +1240,7 @@ async function buildAutoReport(){
   return {
     date: new Date().toLocaleDateString('en-GB'),
     operator: 'Qasim',
-    shift: 'Day',
+    shift: 'Evening / Night',
     accounts: DEFAULT_PARTNERS.map(p=>({name:p, jobs:0})),
     checklist: checklistRows,
     talixoUnmarked: '',
@@ -1627,6 +1644,8 @@ document.getElementById('tabs').addEventListener('click', e=>{
 async function backgroundRefresh(){
   if(!FIREBASE_READY) return;
   if(activeTab === 'report') return;
+  // never reload from the cloud while a save is in flight or the last save failed
+  if(pendingWrites > 0 || lastWriteError) return;
   delete state[todayKey]; delete state[tomorrowKey]; delete state[yesterdayKey];
   mistakesCache = null; questionsCache = null; followupsCache = null;
   window.__notesCache = null; window.__scriptsCache = null;
@@ -2050,7 +2069,10 @@ function askImportantNote(){
 function updateSyncBadge(){
   const el = document.getElementById('syncBadge');
   if(!el) return;
-  if(FIREBASE_READY){
+  if(FIREBASE_READY && lastWriteError){
+    el.textContent = '❌ Cloud save FAILED (' + lastWriteError + ') — saved on this device only';
+    el.style.color = 'var(--red)';
+  } else if(FIREBASE_READY){
     el.textContent = '☁️ Synced across devices';
     el.style.color = 'var(--green)';
   } else if(HAS_CLOUD_STORAGE){
